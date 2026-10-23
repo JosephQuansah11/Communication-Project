@@ -126,7 +126,7 @@ const LO_BIN = hasLibreOffice();
 async function convertLegacy(buffer, originalName) {
   if (!LO_BIN) {
     throw new ImportError(
-      'Legacy binary PowerPoint/WPS files (.ppt, .dps, .dpt) need a converter. Save the file as .pptx in PowerPoint or WPS, or install LibreOffice on the server so Slidesmith can convert it automatically.',
+      'Legacy binary PowerPoint/WPS files (.ppt, .dps, .dpt, .pt) need a converter. Save the file as .pptx in PowerPoint or WPS, or install LibreOffice on the server so Slidesmith can convert it automatically.',
       415
     );
   }
