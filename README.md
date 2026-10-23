@@ -25,6 +25,7 @@ Data lives in `data/` (decks and uploaded media). On first run a five-slide prod
 - Native OOXML parser (`server/pptx.js`) using JSZip + fast-xml-parser. No cloud or Office runtime needed.
 - Slide order and dimensions from `presentation.xml`, theme colours and fonts from `theme1.xml`.
 - Text boxes with paragraph alignment, theme colours, fonts, bold/italic/underline and bullets.
+- Placeholder transforms inherited from slide layouts and masters when a slide omits its own position.
 - Nested group shapes with coordinate transforms, preset geometry mapping (rect, ellipse, rounded,
   triangle, diamond, stars, hexagons, chevrons, arrows, plus, parallelograms, trapezoids).
 - Pictures, backgrounds (including slide layout inheritance), tables with grid widths/heights and header fills,

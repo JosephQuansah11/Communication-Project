@@ -51,6 +51,13 @@ test('imports a PPTX package with shapes, groups, images and tables', async () =
   assert.equal(Math.round(grouped.w), 320);
   assert.equal(Math.round(grouped.h), 64);
 
+  const inherited = slide1.elements.find((element) => element.text === 'Inherited body');
+  assert.ok(inherited, 'placeholder without its own transform imported');
+  assert.equal(Math.round(inherited.x), 64, 'placeholder x inherited from layout');
+  assert.equal(Math.round(inherited.y), 168, 'placeholder y inherited from layout');
+  assert.equal(Math.round(inherited.w), 840);
+  assert.equal(Math.round(inherited.h), 105);
+
   const tableElement = slide2.elements.find((element) => element.type === 'table');
   assert.ok(tableElement, 'table imported');
   assert.equal(tableElement.table.rows, 3);

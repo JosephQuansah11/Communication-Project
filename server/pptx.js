@@ -320,6 +320,39 @@ function safeName(name) {
   return String(name).replace(/[^A-Za-z0-9._-]/g, '_').slice(-80);
 }
 
+function collectPlaceholders(spTree) {
+  const map = {};
+  for (const shape of asArray(spTree?.sp)) {
+    const ph = shape.nvSpPr?.nvPr?.ph;
+    if (!ph) continue;
+    const xfrm = readXfrm(shape.spPr);
+    if (!xfrm) continue;
+    if (ph['@_idx'] !== undefined) map[`idx:${ph['@_idx']}`] = xfrm;
+    if (ph['@_type']) map[`type:${ph['@_type']}`] = xfrm;
+    if (ph['@_idx'] === undefined && !ph['@_type']) map['idx:0'] = xfrm;
+  }
+  return map;
+}
+
+function inheritedXfrm(node, context) {
+  const ph =
+    node.nvSpPr?.nvPr?.ph ||
+    node.nvPicPr?.nvPr?.ph ||
+    node.nvGraphicFramePr?.nvPr?.ph;
+  if (!ph) return null;
+  const idx = ph['@_idx'];
+  const type = ph['@_type'];
+  const keys = [];
+  if (idx !== undefined) keys.push(`idx:${idx}`);
+  if (type) keys.push(`type:${type}`);
+  for (const source of [context.layout, context.master]) {
+    for (const key of keys) {
+      if (source[key]) return source[key];
+    }
+  }
+  return null;
+}
+
 /**
  * @param {Buffer} buffer pptx package
  * @param {(ext: string, data: Buffer, baseName: string) => Promise<string>} saveMedia
@@ -388,15 +421,25 @@ export async function importPptx(buffer, saveMedia) {
     const elements = [];
 
     let background = await parseBackground(sld?.cSld?.bg, rels, theme, mediaUrlFor);
-    if (!background) {
-      const layoutRel = Object.values(rels).find((rel) => /slideLayout$/.test(rel.type));
-      if (layoutRel) {
-        const layoutXml = await readXml(zip, layoutRel.target);
-        if (layoutXml) {
-          const layout = parser.parse(layoutXml);
-          const layoutRels = await loadRels(zip, layoutRel.target);
+    const placeholderContext = { layout: {}, master: {} };
+    const layoutRel = Object.values(rels).find((rel) => /slideLayout$/.test(rel.type));
+    if (layoutRel) {
+      const layoutXml = await readXml(zip, layoutRel.target);
+      if (layoutXml) {
+        const layout = parser.parse(layoutXml);
+        const layoutRels = await loadRels(zip, layoutRel.target);
+        if (!background) {
           const layoutBg = await parseBackground(layout?.sldLayout?.cSld?.bg, layoutRels, theme, mediaUrlFor);
           if (layoutBg) background = layoutBg;
+        }
+        placeholderContext.layout = collectPlaceholders(layout?.sldLayout?.cSld?.spTree);
+        const masterRel = Object.values(layoutRels).find((rel) => /slideMaster$/.test(rel.type));
+        if (masterRel) {
+          const masterXml = await readXml(zip, masterRel.target);
+          if (masterXml) {
+            const master = parser.parse(masterXml);
+            placeholderContext.master = collectPlaceholders(master?.sldMaster?.cSld?.spTree);
+          }
         }
       }
     }
@@ -431,7 +474,7 @@ export async function importPptx(buffer, saveMedia) {
           continue;
         }
 
-        const xfrm = readXfrm(node.spPr || node.graphicFrame || node);
+        const xfrm = readXfrm(node.spPr || node.graphicFrame || node) || inheritedXfrm(node, placeholderContext);
         if (!xfrm) continue;
         const geo = transform;
         const x = geo.ox + (xfrm.x - geo.cx) * geo.sx;

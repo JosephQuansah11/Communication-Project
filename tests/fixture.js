@@ -39,6 +39,11 @@ const slide1 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
           <p:txBody><a:bodyPr anchor="ctr"/><a:p><a:pPr algn="ctr"/><a:r><a:rPr sz="1600" b="1"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:rPr><a:t>Grouped pill</a:t></a:r></a:p></p:txBody>
         </p:sp>
       </p:grpSp>
+      <p:sp>
+        <p:nvSpPr><p:cNvPr id="7" name="Inherited body"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr>
+        <p:spPr/>
+        <p:txBody><a:bodyPr/><a:p><a:r><a:rPr sz="1800"/><a:t>Inherited body</a:t></a:r></a:p></p:txBody>
+      </p:sp>
     </p:spTree>
   </p:cSld>
 </p:sld>`;
@@ -126,6 +131,24 @@ const slide2Rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
 </Relationships>`;
 
+const slideLayout = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldLayout ${NS}>
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr/>
+      <p:sp>
+        <p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
+        <p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="12192000" cy="1143000"/></a:xfrm></p:spPr>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr><p:cNvPr id="3" name="Body"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr>
+        <p:spPr><a:xfrm><a:off x="609600" y="1600200"/><a:ext cx="8001000" cy="1000125"/></a:xfrm></p:spPr>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sldLayout>`;
+
 export async function buildPptxFixture() {
   const zip = new JSZip();
   zip.file(
@@ -143,6 +166,7 @@ export async function buildPptxFixture() {
   zip.file('ppt/slides/_rels/slide1.xml.rels', slide1Rels);
   zip.file('ppt/slides/slide2.xml', slide2);
   zip.file('ppt/slides/_rels/slide2.xml.rels', slide2Rels);
+  zip.file('ppt/slideLayouts/slideLayout1.xml', slideLayout);
   zip.file('ppt/media/image1.png', Buffer.from(PNG_BASE64, 'base64'));
   return zip.generateAsync({ type: 'nodebuffer' });
 }
