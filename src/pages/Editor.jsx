@@ -442,7 +442,7 @@ export default function Editor({ deckId, navigate }) {
       y: shape.y,
       w: shape.w,
       h: shape.h,
-      rotation: 0,
+      rotation: shape.rotation || 0,
       clipShape: shape.shape === 'rect' ? 'none' : shape.shape,
       name: asset.name || file.name,
       radius: shape.shape === 'roundRect' ? shape.radius || 0 : 0,
