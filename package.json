@@ -1,0 +1,26 @@
+{
+  "name": "slidesmith-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Slidesmith Studio - a collaborative presentation editor with PowerPoint import, Excel-style tables, multi-screen presenting and live WebSocket updates.",
+  "scripts": {
+    "dev": "node server/index.js",
+    "build": "vite build",
+    "start": "NODE_ENV=production node server/index.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "fast-xml-parser": "^4.5.1",
+    "jszip": "^3.10.1",
+    "multer": "^1.4.5-lts.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}

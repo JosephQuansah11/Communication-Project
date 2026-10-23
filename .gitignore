@@ -1,0 +1,17 @@
+node_modules/
+dist/
+data/
+.env
+*.log
+.DS_Store
+.cline-home/
+
+# Local verification toolchain (not part of the app)
+.sysroot/
+.apt/
+.chromelibs/
+.chromelibs2023/
+al2.tar
+al2023.tar
+e2e-*.mjs
+run-e2e.sh
