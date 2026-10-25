@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import Icon from './Icon.jsx';
+import { onlineVideoEmbedUrl, parseOnlineVideo } from '../../shared/video.js';
 
 export default function MediaLightbox({ element, onClose }) {
   const [zoom, setZoom] = useState(1);
@@ -8,6 +9,8 @@ export default function MediaLightbox({ element, onClose }) {
   const isImage = element.type === 'image';
   const isVideo = element.type === 'video';
   const isAudio = element.type === 'audio';
+  /** A YouTube or Vimeo link plays in the provider's own player. */
+  const online = isVideo ? parseOnlineVideo(element.src) : null;
 
   useEffect(() => {
     const onKey = (event) => {
@@ -43,7 +46,7 @@ export default function MediaLightbox({ element, onClose }) {
       <div className="lightbox-backdrop" onClick={onClose} />
       <div className="lightbox-top">
         <div className="lightbox-title">
-          <Icon name={isVideo ? 'video' : isAudio ? 'audio' : 'image'} size={18} />
+          <Icon name={isVideo ? 'video' : isAudio ? 'audio' : 'image'} size={22} />
           <span>{element.name || element.label || (isVideo ? 'Video' : isAudio ? 'Audio' : 'Image')}</span>
         </div>
         <div className="lightbox-tools">
@@ -91,7 +94,17 @@ export default function MediaLightbox({ element, onClose }) {
             draggable={false}
           />
         )}
-        {isVideo && (
+        {isVideo && online && (
+          <iframe
+            className="lightbox-online-video"
+            src={onlineVideoEmbedUrl(online, { autoplay: true, start: element.startAt || null })}
+            title={element.name || 'Online video'}
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        )}
+        {isVideo && !online && (
           <video
             className="lightbox-video"
             src={element.src}
@@ -106,7 +119,7 @@ export default function MediaLightbox({ element, onClose }) {
         {isAudio && (
           <div className="lightbox-audio">
             <div className="audio-orb">
-              <Icon name="audio" size={48} />
+              <Icon name="audio" size={58} />
               <span className="audio-ring" />
               <span className="audio-ring delay" />
             </div>

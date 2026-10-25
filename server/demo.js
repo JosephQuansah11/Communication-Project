@@ -2,14 +2,24 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DEMO_DIR = path.resolve(__dirname, '..', 'data', 'uploads', 'demo');
-
 const id = () => `demo-${Math.random().toString(36).slice(2, 10)}`;
 
-function write(name, contents) {
-  fs.mkdirSync(DEMO_DIR, { recursive: true });
-  fs.writeFileSync(path.join(DEMO_DIR, name), contents);
+/**
+ * Where the generated demo artwork lives. The caller passes the deck upload
+ * folder so the packaged app writes next to its own data; the module-relative
+ * fallback keeps direct calls (tests, scripts) working.
+ */
+function defaultAssetsDir() {
+  try {
+    return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', 'uploads', 'demo');
+  } catch {
+    return path.resolve(process.cwd(), 'data', 'uploads', 'demo');
+  }
+}
+
+function write(name, contents, dir) {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, name), contents);
 }
 
 function makeAurora() {
@@ -137,11 +147,11 @@ function makeChime() {
   return buffer;
 }
 
-function ensureAssets() {
-  write('aurora.svg', makeAurora());
-  write('portrait.svg', makePortrait());
-  write('gallery.svg', makeGallery());
-  write('chime.wav', makeChime());
+function ensureAssets(dir) {
+  write('aurora.svg', makeAurora(), dir);
+  write('portrait.svg', makePortrait(), dir);
+  write('gallery.svg', makeGallery(), dir);
+  write('chime.wav', makeChime(), dir);
 }
 
 function baseElement(overrides) {
@@ -194,8 +204,12 @@ function tableCell(value, style = {}, formula) {
   return { value, ...(style ? { style } : {}), ...(formula ? { formula } : {}) };
 }
 
-export function createDemoDeck() {
-  ensureAssets();
+/**
+ * Build the first-run demo deck.
+ * @param {{ assetsDir?: string }} [options] folder for the generated demo artwork.
+ */
+export function createDemoDeck(options = {}) {
+  ensureAssets(options.assetsDir || defaultAssetsDir());
   const now = new Date().toISOString();
 
   const features = [
@@ -204,15 +218,33 @@ export function createDemoDeck() {
     ['03', 'Live by default', 'Pick a display, go full screen and share a six-letter audience link. WebSockets keep every screen in sync.'],
   ];
 
+  // Each feature card flies in on its own click, with its parts staggered — the
+  // demo tour doubles as a live example of the animation timeline.
+  const cardAnimations = [];
   const featureCards = features.flatMap(([number, title, body], index) => {
     const x = 90 + index * 388;
-    return [
+    const card = [
       shapeElement({ id: id(), x, y: 218, w: 344, h: 336, fill: '#ffffff', stroke: '#e2e8f0', strokeWidth: 1, radius: 24 }),
       shapeElement({ id: id(), x: x + 28, y: 248, w: 44, h: 6, fill: index === 0 ? '#6366f1' : index === 1 ? '#0ea5e9' : '#f59e0b', radius: 3 }),
       textElement({ id: id(), x: x + 28, y: 276, w: 80, h: 24, text: number, style: { fontFamily: 'system-ui', fontSize: 13, color: '#94a3b8', bold: true, letterSpacing: 2 } }),
       textElement({ id: id(), x: x + 28, y: 306, w: 288, h: 40, text: title, style: { fontFamily: 'system-ui', fontSize: 25, color: '#0f172a', bold: true } }),
       textElement({ id: id(), x: x + 28, y: 356, w: 288, h: 160, text: body, style: { fontFamily: 'system-ui', fontSize: 15, color: '#475569', lineHeight: 1.55 } }),
     ];
+    card.forEach((element, position) => {
+      cardAnimations.push({
+        targetId: element.id,
+        targetIds: [element.id],
+        kind: 'entrance',
+        effect: 'fly',
+        direction: 'bottom',
+        duration: 520,
+        delay: position * 90,
+        trigger: position === 0 ? 'click' : 'with',
+        group: index,
+        order: position,
+      });
+    });
+    return card;
   });
 
   const header = { bg: '#1e293b', color: '#f8fafc', bold: true, align: 'left', fontSize: 15 };
@@ -270,6 +302,7 @@ export function createDemoDeck() {
     id: 'demo-slide-2',
     notes: 'Three pillars: import fidelity, spreadsheet depth, live delivery.',
     transition: 'slide',
+    animations: cardAnimations,
     background: { color: '#f8fafc', image: null, fit: 'cover', opacity: 1 },
     elements: [
       textElement({ id: id(), x: 90, y: 62, w: 760, h: 64, text: 'Built for the way you present', style: { fontFamily: 'system-ui', fontSize: 42, color: '#0f172a', bold: true } }),

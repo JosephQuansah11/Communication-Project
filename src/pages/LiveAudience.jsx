@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Stage from '../components/Stage.jsx';
 import Icon from '../components/Icon.jsx';
 import MediaLightbox from '../components/MediaLightbox.jsx';
+import AnnotationLayer from '../components/AnnotationLayer.jsx';
 import { normalizeDeck } from '../lib/elements.js';
 import { wsUrl } from '../lib/api.js';
 
@@ -13,8 +14,11 @@ export default function LiveAudience({ code: rawCode }) {
   const [error, setError] = useState('');
   const [deck, setDeck] = useState(null);
   const [index, setIndex] = useState(0);
+  const [step, setStep] = useState(0);
   const [viewers, setViewers] = useState(0);
   const [pointer, setPointer] = useState(null);
+  const [blank, setBlank] = useState('none');
+  const [annotations, setAnnotations] = useState({});
   const [reactions, setReactions] = useState([]);
   const [lightbox, setLightbox] = useState(null);
   const [chrome, setChrome] = useState(true);
@@ -67,10 +71,16 @@ export default function LiveAudience({ code: rawCode }) {
         if (message.type === 'session') {
           setDeck(normalizeDeck(message.deck));
           setIndex(message.slideIndex || 0);
+          setStep(message.step || 0);
+          setBlank(message.blank || 'none');
+          setAnnotations(message.annotations || {});
           setStatus('live');
           setError('');
         }
-        if (message.type === 'navigate') setIndex(message.slideIndex || 0);
+        if (message.type === 'navigate') {
+          setIndex(message.slideIndex || 0);
+          setStep(message.step || 0);
+        }
         if (message.type === 'deck') {
           setDeck(normalizeDeck(message.deck));
           setIndex(message.slideIndex || 0);
@@ -98,6 +108,11 @@ export default function LiveAudience({ code: rawCode }) {
           setPointer({ x: message.x, y: message.y, name: message.name });
           clearTimeout(pointerTimer.current);
           pointerTimer.current = setTimeout(() => setPointer(null), 1800);
+        }
+        // Blanking (B / W) and the presenter's drawings follow the show.
+        if (message.type === 'blank') setBlank(message.blank || 'none');
+        if (message.type === 'annotation') {
+          setAnnotations((current) => ({ ...current, [message.slideIndex || 0]: message.strokes || [] }));
         }
         if (message.type === 'reaction') {
           const id = `${Date.now()}-${Math.random()}`;
@@ -140,7 +155,7 @@ export default function LiveAudience({ code: rawCode }) {
   if (status === 'error') {
     return (
       <div className="center-screen dark">
-        <Icon name="wifi" size={34} />
+        <Icon name="wifi" size={41} />
         <h2>Live session unavailable</h2>
         <p>{error || 'This session has ended or the code is incorrect.'}</p>
         <a className="primary-btn" href="/">Back to Slidesmith</a>
@@ -151,7 +166,7 @@ export default function LiveAudience({ code: rawCode }) {
   if (status === 'ended') {
     return (
       <div className="center-screen dark">
-        <Icon name="check" size={34} />
+        <Icon name="check" size={41} />
         <h2>The presentation has ended</h2>
         <p>Thanks for watching. You can close this window.</p>
         <a className="primary-btn" href="/">Back to Slidesmith</a>
@@ -163,7 +178,7 @@ export default function LiveAudience({ code: rawCode }) {
     return (
       <div className="audience-waiting">
         <div className="waiting-card">
-          <span className="brand-mark large"><Icon name="logo" size={30} /></span>
+          <span className="brand-mark large"><Icon name="logo" size={36} /></span>
           <h2>Joining live session</h2>
           <strong className="waiting-code">{code}</strong>
           <div className="live-waiting"><span className="pulse-dot" /> Waiting for the presenter…</div>
@@ -177,7 +192,18 @@ export default function LiveAudience({ code: rawCode }) {
   return (
     <div className={`audience ${chrome ? 'chrome-on' : 'chrome-off'}`} onMouseMove={flashChrome}>
       <div className="audience-stage" onClick={() => flashChrome()}>
-        <Stage deck={deck} slide={slide} mode="contain" onMediaExpand={setLightbox} />
+        {blank === 'none' ? (
+          <Stage
+            deck={deck}
+            slide={slide}
+            mode="contain"
+            onMediaExpand={setLightbox}
+            animStep={step}
+            overlay={<AnnotationLayer strokes={annotations[index] || []} className="present-annotations" />}
+          />
+        ) : (
+          <div className={`blackout-screen ${blank}`} />
+        )}
         {pointer && (
           <div className="remote-pointer" style={{ left: `${pointer.x}%`, top: `${pointer.y}%` }}>
             <span className="remote-cursor" />
@@ -198,14 +224,14 @@ export default function LiveAudience({ code: rawCode }) {
 
       <header className="audience-topbar">
         <div className="audience-brand">
-          <span className="brand-mark"><Icon name="logo" size={18} /></span>
+          <span className="brand-mark"><Icon name="logo" size={22} /></span>
           <div>
             <strong>{deck.title}</strong>
             <small>Live from the presenter</small>
           </div>
         </div>
         <div className="audience-meta">
-          <span className="audience-viewers"><Icon name="users" size={14} /> {viewers || 1}</span>
+          <span className="audience-viewers"><Icon name="users" size={17} /> {viewers || 1}</span>
           <span className="live-pill connected"><span className="live-dot" /> LIVE</span>
           <button
             type="button"

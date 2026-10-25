@@ -17,7 +17,7 @@ class Boundary extends React.Component {
   render() {
     if (this.state.error) {
       return (
-        <pre style={{ color: '#fecaca', background: '#0b1120', padding: 24, whiteSpace: 'pre-wrap', fontSize: 12 }}>
+        <pre style={{ color: '#fecaca', background: '#0b1120', padding: 24, whiteSpace: 'pre-wrap', fontSize: 14 }}>
           {String(this.state.error?.stack || this.state.error)}
         </pre>
       );

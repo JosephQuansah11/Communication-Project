@@ -262,7 +262,7 @@ export default function TableEditor({ element, onChange, onClose, live = false }
       <div className="table-editor">
         <header className="table-editor-top">
           <div className="table-editor-title">
-            <span className="table-icon"><Icon name="table" size={18} /></span>
+            <span className="table-icon"><Icon name="table" size={22} /></span>
             <div>
               <strong>Spreadsheet table</strong>
               <small>{live ? 'Live edit · audience updates instantly' : `${table.rows} rows × ${table.cols} columns`}</small>
@@ -281,7 +281,7 @@ export default function TableEditor({ element, onChange, onClose, live = false }
               Reset
             </button>
             <button type="button" className="primary-btn small" onClick={onClose}>
-              <Icon name="check" size={16} /> Done
+              <Icon name="check" size={19} /> Done
             </button>
             <button type="button" className="ghost-btn icon-only" onClick={onClose} title="Close">
               <Icon name="close" />
@@ -291,31 +291,31 @@ export default function TableEditor({ element, onChange, onClose, live = false }
 
         <div className="sheet-toolbar">
           <button type="button" className="sheet-btn" title="Bold" onClick={() => patchRange({ bold: !activeStyle.bold })}>
-            <Icon name="bold" size={16} />
+            <Icon name="bold" size={19} />
           </button>
           <button type="button" className="sheet-btn" title="Italic" onClick={() => patchRange({ italic: !activeStyle.italic })}>
-            <Icon name="italic" size={16} />
+            <Icon name="italic" size={19} />
           </button>
           <button type="button" className="sheet-btn" title="Underline" onClick={() => patchRange({ underline: !activeStyle.underline })}>
-            <Icon name="underline" size={16} />
+            <Icon name="underline" size={19} />
           </button>
           <span className="sheet-divider" />
           <button type="button" className="sheet-btn" title="Align left" onClick={() => patchRange({ align: 'left' })}>
-            <Icon name="alignLeft" size={16} />
+            <Icon name="alignLeft" size={19} />
           </button>
           <button type="button" className="sheet-btn" title="Align center" onClick={() => patchRange({ align: 'center' })}>
-            <Icon name="alignCenter" size={16} />
+            <Icon name="alignCenter" size={19} />
           </button>
           <button type="button" className="sheet-btn" title="Align right" onClick={() => patchRange({ align: 'right' })}>
-            <Icon name="alignRight" size={16} />
+            <Icon name="alignRight" size={19} />
           </button>
           <span className="sheet-divider" />
           <label className="sheet-color" title="Text colour">
-            <Icon name="font" size={15} />
+            <Icon name="font" size={18} />
             <input type="color" value={activeStyle.color || '#0f172a'} onChange={(event) => patchRange({ color: event.target.value })} />
           </label>
           <label className="sheet-color" title="Fill colour">
-            <Icon name="fill" size={15} />
+            <Icon name="fill" size={18} />
             <input type="color" value={activeStyle.bg || '#ffffff'} onChange={(event) => patchRange({ bg: event.target.value })} />
           </label>
           <select

@@ -11,16 +11,81 @@ import os from 'node:os';
 import { importPptx, ImportError, isLegacyOfficeBuffer, isZipBuffer } from './pptx.js';
 import { createDemoDeck } from './demo.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = moduleDir();
 const ROOT = path.resolve(__dirname, '..');
-const DATA_DIR = path.join(ROOT, 'data');
+/** True when running from the packaged single-file executable (Node SEA). */
+const STANDALONE = process.env.SLIDESMITH_STANDALONE === '1';
+const isProduction = process.env.NODE_ENV === 'production';
+const DATA_DIR = STANDALONE ? path.join(userDataRoot(), 'data') : path.join(ROOT, 'data');
 const DECKS_DIR = path.join(DATA_DIR, 'decks');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
-const PORT = Number(process.env.PORT || 3000);
-const isProduction = process.env.NODE_ENV === 'production';
+const requestedPort = Number(cliOption('port') || process.env.PORT || 3000);
+let PORT = Number.isFinite(requestedPort) && requestedPort > 0 ? requestedPort : 3000;
 
-await fs.mkdir(DECKS_DIR, { recursive: true });
-await fs.mkdir(UPLOADS_DIR, { recursive: true });
+/** Directory of this module. Tolerates a bundled CommonJS build where `import.meta` is empty. */
+function moduleDir() {
+  try {
+    return path.dirname(fileURLToPath(import.meta.url));
+  } catch {
+    return process.cwd();
+  }
+}
+
+/** Read `--name value` or `--name=value` from the command line. */
+function cliOption(name) {
+  const args = process.argv.slice(2);
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === `--${name}`) return args[i + 1];
+    if (arg.startsWith(`--${name}=`)) return arg.slice(name.length + 3);
+  }
+  return null;
+}
+
+function hasFlag(name) {
+  return process.argv.slice(2).some((arg) => arg === `--${name}` || arg.startsWith(`--${name}=`));
+}
+
+/** Per-user application data folder, used when the install directory is read-only. */
+function userAppDataDir() {
+  const home = os.homedir();
+  if (process.platform === 'win32') {
+    return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Slidesmith Studio');
+  }
+  if (process.platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'Slidesmith Studio');
+  return path.join(process.env.XDG_DATA_HOME || path.join(home, '.local', 'share'), 'slidesmith-studio');
+}
+
+/**
+ * Writable folder for decks and uploads. The packaged app keeps everything next
+ * to the executable when that folder is writable (portable install), and falls
+ * back to the per-user application data folder otherwise.
+ */
+function userDataRoot() {
+  const override = process.env.SLIDESMITH_DATA_DIR;
+  if (override) return override;
+  const candidates = [];
+  if (STANDALONE) candidates.push(path.join(path.dirname(process.execPath), 'SlidesmithData'));
+  candidates.push(userAppDataDir());
+  for (const candidate of candidates) {
+    try {
+      fsSync.mkdirSync(candidate, { recursive: true });
+      const probe = path.join(candidate, '.write-test');
+      fsSync.writeFileSync(probe, 'ok');
+      fsSync.rmSync(probe, { force: true });
+      return candidate;
+    } catch {
+      /* not writable — try the next location */
+    }
+  }
+  return path.join(os.tmpdir(), 'slidesmith-data');
+}
+
+/** Create the storage folders. Called from `start()` so the bundle stays CommonJS-safe. */
+async function ensureStorage() {
+  await fs.mkdir(DECKS_DIR, { recursive: true });
+  await fs.mkdir(UPLOADS_DIR, { recursive: true });
+}
 
 const app = express();
 app.disable('x-powered-by');
@@ -228,6 +293,8 @@ app.post('/api/import', upload.single('file'), async (req, res, next) => {
       height: imported.height,
       slides: imported.slides,
       importedFonts: imported.fonts,
+      // The deck's own theme, so "generate a similar background" can reuse it.
+      theme: imported.theme || null,
       sourceFile: originalName,
       createdAt: now,
       updatedAt: now,
@@ -322,12 +389,17 @@ function sessionSnapshot(session) {
     title: session.deck?.title || 'Live presentation',
     deck: session.deck,
     slideIndex: session.slideIndex,
+    step: session.step || 0,
+    blank: session.blank || 'none',
+    annotations: session.annotations || {},
     presenting: true,
   };
 }
 
 export function attachLiveServer(server) {
   const wss = new WebSocketServer({ server, path: '/ws' });
+  // ws re-emits socket errors; without a handler an occupied port would crash the app.
+  wss.on('error', () => {});
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) {
       if (ws.isAlive === false) {
@@ -413,7 +485,10 @@ export function attachLiveServer(server) {
           case 'navigate': {
             const index = Math.max(0, Math.min((session.deck?.slides?.length || 1) - 1, Number(message.slideIndex) || 0));
             session.slideIndex = index;
-            broadcast(session, { type: 'navigate', slideIndex: index });
+            // `step` is the animation step inside the slide, so the audience sees
+            // each item appear exactly when the presenter does.
+            session.step = Math.max(0, Number(message.step) || 0);
+            broadcast(session, { type: 'navigate', slideIndex: index, step: session.step });
             break;
           }
           case 'deck:update': {
@@ -436,6 +511,20 @@ export function attachLiveServer(server) {
           }
           case 'pointer': {
             broadcast(session, { type: 'pointer', x: Number(message.x), y: Number(message.y), name: ws.name }, ws);
+            break;
+          }
+          case 'blank': {
+            // B / W blanking: the audience screen follows the presenter.
+            session.blank = ['black', 'white'].includes(message.blank) ? message.blank : 'none';
+            broadcast(session, { type: 'blank', blank: session.blank }, ws);
+            break;
+          }
+          case 'annotation': {
+            // Drawings are stored per slide so late joiners still see them.
+            const slideIndex = Math.max(0, Number(message.slideIndex) || 0);
+            const strokes = Array.isArray(message.strokes) ? message.strokes : [];
+            session.annotations = { ...(session.annotations || {}), [slideIndex]: strokes };
+            broadcast(session, { type: 'annotation', slideIndex, strokes }, ws);
             break;
           }
           case 'presenting': {
@@ -493,13 +582,138 @@ export function attachLiveServer(server) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Client delivery: embedded assets (packaged app) or disk (dev / server)
+ * ------------------------------------------------------------------ */
+
+const CONTENT_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+};
+
+/** Serve the React build that was inlined into the executable at build time. */
+async function mountEmbeddedClient() {
+  const { CLIENT_ASSETS } = await import('./generated/client-assets.js');
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/media/') || req.path.startsWith('/ws')) return next();
+    const direct = CLIENT_ASSETS[req.path];
+    const asset = direct || (path.extname(req.path) ? null : CLIENT_ASSETS['/index.html']);
+    if (!asset) return next();
+    res.setHeader('Content-Type', asset.type || CONTENT_TYPES[path.extname(req.path)] || 'application/octet-stream');
+    res.setHeader('Cache-Control', direct && req.path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-store');
+    res.end(Buffer.from(asset.body, 'base64'));
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Launch helpers for the packaged app
+ * ------------------------------------------------------------------ */
+
+/** Locate a Chromium browser so the app can open in a chrome-less window. */
+function findChromiumBrowser() {
+  const candidates = [];
+  if (process.platform === 'win32') {
+    const pf = process.env['ProgramFiles'] || 'C:\\Program Files';
+    const pf86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    const local = process.env.LOCALAPPDATA || '';
+    candidates.push(
+      path.join(pf86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      path.join(pf, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      path.join(pf, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(pf86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(local, 'Google', 'Chrome', 'Application', 'chrome.exe')
+    );
+  } else if (process.platform === 'darwin') {
+    candidates.push(
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+      '/Applications/Chromium.app/Contents/MacOS/Chromium'
+    );
+  } else {
+    candidates.push('/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/microsoft-edge');
+  }
+  for (const candidate of candidates) {
+    try {
+      if (candidate && fsSync.existsSync(candidate)) return candidate;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
+/** Open the app in a window without browser chrome, falling back to the default browser. */
+function openBrowser(url) {
+  if (hasFlag('no-open') || process.env.SLIDESMITH_NO_OPEN === '1') return;
+  const launch = (command, args) => {
+    const child = spawn(command, args, { detached: true, stdio: 'ignore' });
+    child.on('error', () => {});
+    child.unref();
+  };
+  try {
+    const chromium = findChromiumBrowser();
+    if (chromium) {
+      launch(chromium, [`--app=${url}`, '--new-window', '--window-size=1440,900']);
+      return;
+    }
+    if (process.platform === 'win32') launch('cmd', ['/c', 'start', '', url]);
+    else if (process.platform === 'darwin') launch('open', [url]);
+    else launch('xdg-open', [url]);
+  } catch {
+    /* the URL is printed in the console either way */
+  }
+}
+
+function tryListen(server, port, host) {
+  return new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.removeListener('listening', onListening);
+      if (error.code === 'EADDRINUSE' || error.code === 'EACCES') resolve(false);
+      else reject(error);
+    };
+    const onListening = () => {
+      server.removeListener('error', onError);
+      resolve(true);
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(port, host);
+  });
+}
+
+/** Bind the first free port, so a stale instance never blocks the packaged app. */
+async function listenWithFallback(server) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const port = PORT + attempt;
+    // eslint-disable-next-line no-await-in-loop
+    if (await tryListen(server, port, '0.0.0.0')) {
+      PORT = port;
+      return;
+    }
+  }
+  throw new Error(`No free port between ${PORT} and ${PORT + 11}.`);
+}
+
+/* ------------------------------------------------------------------ *
  * Static app, error handling, bootstrap
  * ------------------------------------------------------------------ */
 
 async function ensureDemoDeck() {
   const decks = await listDecks();
   if (decks.length) return;
-  const demo = createDemoDeck();
+  const demo = createDemoDeck({ assetsDir: path.join(UPLOADS_DIR, 'demo') });
   await writeDeck(demo);
 }
 
@@ -517,7 +731,11 @@ app.use((error, req, res, next) => {
 });
 
 async function start() {
-  if (isProduction) {
+  await ensureStorage();
+
+  if (STANDALONE) {
+    await mountEmbeddedClient();
+  } else if (isProduction) {
     const dist = path.join(ROOT, 'dist');
     app.use('/assets', express.static(path.join(dist, 'assets'), { maxAge: '1y', immutable: true }));
     app.use(express.static(dist, { index: false, maxAge: 0 }));
@@ -538,12 +756,32 @@ async function start() {
 
   await ensureDemoDeck();
   const server = new (await import('node:http')).Server(app);
+  await listenWithFallback(server);
+  // Attach the live socket once the port is secured, so a busy port can fall
+  // through to the next one instead of failing the whole start-up.
   attachLiveServer(server);
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n  Slidesmith Studio  →  http://localhost:${PORT}`);
-    console.log(`  Live presentation socket: ws://localhost:${PORT}/ws`);
-    console.log(`  Legacy converter: ${LO_BIN ? LO_BIN : 'not installed (export legacy files as .pptx)'}\n`);
-  });
+
+  const url = `http://localhost:${PORT}`;
+  console.log('');
+  console.log('  ==============================================');
+  console.log('    Slidesmith Studio');
+  console.log('  ==============================================');
+  console.log(`   Open in your browser:  ${url}`);
+  console.log(`   Live audience socket:  ws://localhost:${PORT}/ws`);
+  console.log(`   Decks & uploads:       ${DATA_DIR}`);
+  console.log(`   Legacy .ppt converter: ${LO_BIN ? LO_BIN : 'not installed (export as .pptx)'}`);
+  console.log('');
+  console.log('   Keep this window open while you work. Close it to stop the app.');
+  console.log('');
+
+  if (STANDALONE) openBrowser(url);
+
+  const shutdown = () => {
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 1500).unref();
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
 start().catch((error) => {

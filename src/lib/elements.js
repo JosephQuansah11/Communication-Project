@@ -1,3 +1,8 @@
+import { htmlToPlainText, sanitizeHtml } from './richtext.js';
+import { normalizeAnimations } from '../../shared/animations.js';
+import { normalizePictureFill } from './backgrounds.js';
+import { onlineVideoLabel, parseOnlineVideo } from '../../shared/video.js';
+
 export const uid = (prefix = 'el') =>
   `${prefix}-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 12) : Math.random().toString(36).slice(2, 14)}`;
 
@@ -8,6 +13,10 @@ export const DEFAULT_STYLE = {
   bold: false,
   italic: false,
   underline: false,
+  strike: false,
+  highlight: null,
+  superscript: false,
+  subscript: false,
   align: 'left',
   valign: 'top',
   lineHeight: 1.25,
@@ -17,6 +26,7 @@ export const DEFAULT_STYLE = {
 export const BACKGROUND_DEFAULT = {
   color: '#ffffff',
   image: null,
+  gradient: null,
   fit: 'cover',
   opacity: 1,
   blur: 0,
@@ -26,6 +36,7 @@ export function createSlide(overrides = {}) {
   return {
     id: uid('slide'),
     elements: [],
+    animations: [],
     background: { ...BACKGROUND_DEFAULT },
     notes: '',
     transition: 'fade',
@@ -57,8 +68,10 @@ export function createText(overrides = {}) {
     rotation: 0,
     opacity: 1,
     text: 'Double-click to edit',
+    html: null,
     style: { ...DEFAULT_STYLE, fontSize: 40, bold: true },
     fill: 'transparent',
+    fillImage: null,
     stroke: null,
     strokeWidth: 0,
     radius: 0,
@@ -79,10 +92,12 @@ export function createShape(shape = 'rect', overrides = {}) {
     rotation: 0,
     opacity: 1,
     fill: '#6366f1',
+    fillImage: null,
     stroke: null,
     strokeWidth: 0,
     radius: shape === 'roundRect' ? 24 : 0,
     text: '',
+    html: null,
     style: { ...DEFAULT_STYLE, fontSize: 24, color: '#ffffff', align: 'center', valign: 'middle' },
     ...overrides,
   };
@@ -132,8 +147,34 @@ export function createVideo(src, overrides = {}) {
     loop: false,
     autoplay: false,
     expandable: true,
+    /** Set when the video is a link to the web rather than a file in the deck. */
+    online: false,
+    provider: null,
+    videoId: null,
+    startAt: null,
     ...overrides,
   };
+}
+
+/**
+ * A video that lives on the web — a YouTube or Vimeo link, played inside the
+ * slide by the provider's own player. The poster comes from the provider so the
+ * slide still shows something before it is played. Returns null for links that
+ * are not a supported online video.
+ */
+export function createOnlineVideo(url, overrides = {}) {
+  const video = parseOnlineVideo(url);
+  if (!video) return null;
+  return createVideo(video.watchUrl, {
+    name: onlineVideoLabel(video.watchUrl),
+    poster: video.thumbnailUrl,
+    fit: 'contain',
+    online: true,
+    provider: video.provider,
+    videoId: video.id,
+    startAt: video.start,
+    ...overrides,
+  });
 }
 
 export function createAudio(src, overrides = {}) {
@@ -196,6 +237,7 @@ export function normalizeDeck(deck) {
     background: { ...BACKGROUND_DEFAULT, ...(slide.background || {}) },
     notes: slide.notes || '',
     transition: slide.transition || 'fade',
+    animations: normalizeAnimations(slide.animations),
     elements: (slide.elements || []).map((element, index) => normalizeElement(element, index)),
   }));
   if (!slides.length) slides.push(createSlide());
@@ -216,6 +258,13 @@ function normalizeElement(element, index) {
   if (base.type === 'text' || base.type === 'shape') {
     base.style = { ...DEFAULT_STYLE, ...(base.style || {}) };
     base.fill = base.fill ?? 'transparent';
+    base.fillImage = normalizePictureFill(base.fillImage);
+    if (base.html !== undefined && base.html !== null) {
+      const clean = sanitizeHtml(base.html);
+      base.html = clean || null;
+      const plain = htmlToPlainText(base.html);
+      if (plain) base.text = plain;
+    }
   }
   if (base.type === 'image' || base.type === 'video') {
     base.fit = base.fit || 'cover';

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import SlideView from './SlideView.jsx';
+import { backgroundStyles } from '../lib/backgrounds.js';
 
 export function useStageScale(width, height, mode = 'contain') {
   const ref = useRef(null);
@@ -38,31 +39,28 @@ export default function Stage({
   className = '',
   overlay,
   children,
+  animStep = null,
 }) {
   const { ref, scale, size } = useStageScale(deck.width, deck.height, mode);
   const background = slide?.background || {};
+  const { container, layer } = backgroundStyles(background);
+  const shellColor = container.backgroundColor;
 
   useEffect(() => {
-    document.documentElement.style.backgroundColor = background.color || '#04060f';
+    document.documentElement.style.backgroundColor = shellColor;
     return () => {
       document.documentElement.style.backgroundColor = '';
     };
-  }, [background.color]);
+  }, [shellColor]);
 
   return (
-    <div ref={ref} className={`presentation-stage ${className}`} style={{ backgroundColor: background.color || '#04060f' }}>
+    <div ref={ref} className={`presentation-stage ${className}`} style={{ backgroundColor: shellColor }}>
       <div
         className="stage-background"
         style={{
           position: 'absolute',
           inset: 0,
-          backgroundColor: background.color || '#04060f',
-          backgroundImage: background.image ? `url("${background.image}")` : undefined,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          opacity: background.opacity ?? 1,
-          filter: background.blur ? `blur(${background.blur}px)` : undefined,
+          ...(layer || { backgroundColor: shellColor }),
         }}
       />
       {scale > 0 && (
@@ -87,6 +85,7 @@ export default function Stage({
             mediaInteractive
             onMediaExpand={onMediaExpand}
             onTableDoubleClick={onTableDoubleClick}
+            animStep={animStep}
           />
         </div>
       )}

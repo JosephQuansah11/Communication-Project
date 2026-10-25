@@ -7,7 +7,13 @@
   "scripts": {
     "dev": "node server/index.js",
     "build": "vite build",
-    "start": "NODE_ENV=production node server/index.js",
+    "build:client": "vite build",
+    "build:embed": "node scripts/embed-client.mjs",
+    "build:exe": "npm run build:client && node scripts/embed-client.mjs && node scripts/build-exe.mjs",
+    "preview:app": "npm run build:client && node scripts/embed-client.mjs && node server/standalone.js --no-open",
+    "start": "node scripts/start-server.mjs",
+    "smoke": "node scripts/smoke-test.mjs",
+    "import:check": "node scripts/check-import.mjs",
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {
@@ -21,6 +27,9 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.21.5",
+    "postject": "^1.0.0-alpha.6",
+    "rcedit": "^5.0.2",
     "vite": "^5.4.11"
   }
 }

@@ -13,23 +13,130 @@ npm install
 npm run dev        # http://localhost:3000 (Vite middleware + API + WebSocket)
 npm run build
 npm start          # production server on PORT (default 3000)
-npm test           # formula engine + PPTX importer tests
+npm test           # formula engine, PPTX importer and rich-text tests
 ```
 
 Data lives in `data/` (decks and uploaded media). On first run a five-slide product tour is generated in
 `data/decks/demo.json` with demo imagery and audio.
 
+## Ship it as a single application (one `.exe`)
+
+<img src="docs/app-icon.png" alt="Slidesmith Studio app icon" width="96" align="right" />
+
+Build a **single, self-contained executable** that anyone can download and double-click — no Node.js, no
+installer, no `npm install` on their machine:
+
+```bash
+npm install
+npm run build:exe
+```
+
+That produces **`build/Slidesmith.exe`** (about 91 MB, Windows). It bundles the Express server, every
+dependency, the compiled React client and the Node runtime into one file, with the app icon and version
+metadata stamped in.
+
+### Using the packaged app
+
+1. Copy `Slidesmith.exe` anywhere — a folder, a USB stick, a network share.
+2. Double-click it. A console window opens and the app appears in its own browser window.
+3. Your decks live in `SlidesmithData/` next to the executable. If that folder is read-only (for example
+   `Program Files`), the app falls back to `%APPDATA%\Slidesmith Studio`.
+4. Close the console window to stop the app.
+
+Command line flags (optional):
+
+| Flag | Effect |
+| --- | --- |
+| `--port=8080` | Use a specific port (default `3000`; the app steps to the next free port if it is busy) |
+| `--no-open` | Start the server without launching a browser window |
+
+Environment overrides: `SLIDESMITH_DATA_DIR` moves the data folder, `SLIDESMITH_NO_OPEN=1` disables the
+browser launch, `PORT` sets the port.
+
+### Notes for whoever receives the file
+
+- It is **unsigned**, so Windows SmartScreen may warn on first run: *More info* → *Run anyway*. Sign the
+  executable with your own certificate if you distribute it widely.
+- The file is large because it embeds the Node.js runtime — that is what removes the install step.
+- Builds are per platform: `npm run build:exe` produces a Windows `.exe` on Windows, a macOS binary on macOS
+  and a Linux binary on Linux (Node's single-executable packaging cannot cross-compile).
+- Legacy binary `.ppt`/`.dps` files still need LibreOffice on the machine running the app; modern `.pptx`
+  files import natively with no extra software.
+
+### Verifying a build
+
+`npm run smoke` exercises a running instance end to end — static delivery, the deck API, media upload,
+native PPTX import and a live WebSocket room:
+
+```bash
+build\Slidesmith.exe --no-open --port=3000    # or: npm run dev
+npm run smoke -- http://localhost:3000
+```
+
 ## What is implemented
+
+### Window & ribbon
+- The editor is a **WPS-style window**: a ribbon with the *File / Home / Insert / Design / Transitions /
+  Animations / Slide Show / Review / View / Tools* tabs, each showing labelled groups of controls
+  (Clipboard, Slides, Font, Paragraph, Insert, Arrange, Editing, Background, Slide size, Timing, …).
+- The **File** button opens the presentation menu (new, open library, save, import, duplicate, export JSON, delete)
+  and the quick-access cluster next to it holds save / undo / redo.
+- A **document tab strip** sits under the ribbon: every deck you open appears as a tab with its own accent, a × to
+  close it (middle-click works too), a **+ New** button and a collapse toggle. Tabs are remembered per browser, so
+  the presentations you had open come back the next time the window opens.
+- Everything the ribbon does is reachable without it: the inspector on the right still carries the detailed
+  controls, and **View ▸ Panels** hides or shows the slide rail, the inspector and the tab strip.
+- **Slide layouts** (*Home ▸ Layout*) rebuild the current slide as a title slide, title + content, two content,
+  section header, picture-right or blank, and **Sections** (*Home ▸ Section*) group slides into named, collapsible
+  blocks in the rail.
+- **Menus float above everything**: every dropdown (File, Layout, Section, Shapes…) is rendered on a fixed layer on
+  top of the window, so it can never be clipped by the ribbon's scroll container, and it flips above the button when
+  there is no room below.
+- **Format painter**: copy the look of one object (text style, fill, picture fill, border, radius, padding) and
+  click another object to paste it.
+- **The window itself can wear a picture** (*View ▸ Window picture*): an image, its opacity and blur are painted
+  behind the canvas area and remembered per browser.
 
 ### PowerPoint / WPS import
 - Native OOXML parser (`server/pptx.js`) using JSZip + fast-xml-parser. No cloud or Office runtime needed.
 - Slide order and dimensions from `presentation.xml`, theme colours and fonts from `theme1.xml`.
-- Text boxes with paragraph alignment, theme colours, fonts, bold/italic/underline and bullets.
+- **Layouts and masters are kept**: a slide with no background of its own inherits the layout's, then the master's —
+  solid, **gradient**, pattern and theme (`<p:bgRef>`) fills included — and the decorative pictures that the layout
+  and master draw (bands, logos, side art) are imported underneath the slide's own objects, exactly where the design
+  put them. Placeholder pictures are skipped, since the slide supplies those.
+- **Missing design images are replaced with a similar one.** If a slide points at a background picture that is not in
+  the package (linked media, a stripped file), the importer generates a background from the deck's own theme colours
+  — same palette, same mood — and uses it, so the layout still reads correctly. The deck keeps its theme
+  (`theme.colors`, major/minor fonts) so the editor can do the same on demand
+  (*Design ▸ Similar look*, or **Generate a matching background** in the inspector).
+- Text boxes keep what makes a slide look designed: **text highlight** (the coloured bands behind words),
+  paragraph **space before/after**, **line spacing**, **bullets and auto-numbering** with their hanging indent,
+  per-side body **insets**, vertical anchoring and **autofit** shrinking — so lines land where PowerPoint puts them
+  instead of piling up at the top of the box.
+- Colours resolve through the theme, including the `bg1`/`tx1` aliases and the `lumMod`/`lumOff` tints and shades
+  ("lighter 60%") that themed shapes are built from.
+- Shapes that inherit their paint are imported as well: **`grpFill`** (a group's fill), **`p:style`** references and
+  the theme's **`spDef`** shape defaults — so grouped artwork and default-styled shapes keep their colour.
+- **SmartArt** comes in from the drawing PowerPoint renders beside the diagram data (`drawingN.xml`), scaled into the
+  frame's box with the diagram's own shapes, colours and text.
+- **Online videos play inside the slide.** A YouTube or Vimeo link (PowerPoint's *Insert ▸ Video ▸ Online Video*,
+  stored as an external relationship beside a poster frame) is imported as a playable video: the poster frame stands
+  in until it is played, then the provider's player runs inside the slide — in the editor, the show, the presenter
+  console and the live audience page. `youtu.be/<id>`, `youtube.com/watch?v=<id>`, `/embed/`, `/shorts/`, `/live/`,
+  playlists, `vimeo.com/<id>` and start times (`?t=90`, `#t=1m30s`) are all understood.
+- Picture fills (`a:blipFill`), outline-only shapes, connectors, tables with grid widths/heights and header fills,
+  plus audio/video relationships.
+- **The result is checked against the file itself.** `npm run import:check -- <file.pptx>` re-reads the OOXML and
+  compares every shape's position, size and text details with what the importer produced, printing any difference
+  (add `--slide N` for a single slide). It exits non-zero when something is off, so it can gate a release.
 - Placeholder transforms inherited from slide layouts and masters when a slide omits its own position.
 - Nested group shapes with coordinate transforms, preset geometry mapping (rect, ellipse, rounded,
   triangle, diamond, stars, hexagons, chevrons, arrows, plus, parallelograms, trapezoids).
 - Pictures, backgrounds (including slide layout inheritance), tables with grid widths/heights and header fills,
   plus audio/video relationships.
+- **Slide animations** are read from `<p:timing>` — entrance, emphasis, exit and motion-path effects with their
+  duration, delay, trigger (`on click` / `with previous` / `after previous`) and click grouping, so a deck plays
+  back in the same order it was authored.
 - Imported media is extracted to `data/uploads/<deck>/` and served under `/media/...`.
 - `.pptx`, `.ppsx`, `.potx` are parsed natively. Legacy binary `.ppt`, `.dps`, `.dpt`, `.pt` are converted with
   LibreOffice when `soffice`/`libreoffice` is installed; otherwise the API returns a clear "save as .pptx" message.
@@ -58,39 +165,147 @@ The inspector shows a **system** badge and the editor footer shows the active fo
   (count/sum/average). Changes recalculate instantly and persist with the deck.
 - Tables are also editable **while presenting**; every cell change is broadcast to the audience in real time.
 
+### Text boxes & rich formatting
+- **Double-click anywhere on the canvas** to drop a text box at that point and start typing immediately.
+- While a box is open for editing, its whole rectangle belongs to the editor: clicking the text, the padding or
+  the empty space inside it keeps the session alive, so you can select, retype, restyle and reposition the caret
+  freely. Only a click **outside** the box commits and closes it.
+- A double-click that lands outside never spawns a second box from the click that closed the editor, and a
+  double-click inside an object's rectangle never spawns one at all — so nothing is duplicated by accident.
+- Edits are saved whenever you click outside the box, press `Esc`, change slide or blur into another control —
+  an untouched empty box is discarded automatically.
+- Floating format toolbar over the editing box: **font family and font size for the highlighted text**, **Header
+  (H1), Sub header (H2), Small header (H3) and Body**, bold, italic, underline, superscript, subscript, numbered
+  and bulleted lists, left/centre/right/justify alignment, **highlighting**, text colour, and clear-formatting.
+  All of it applies to the current selection and is kept alive while the box stays open; with just a caret (nothing
+  highlighted) the font controls restyle the whole box, exactly like the inspector's font section.
+- Formatting is stored as sanitized inline HTML on the element (`html` + a plain-text mirror in `text`), so it
+  renders identically in the editor, thumbnails, the presenter and the live audience. Imported PPTX runs are
+  converted to the same vocabulary, and the inspector can apply highlight/script to a whole box.
+- **Pasting into an open box** keeps the caret and the formatting the text came with (a picture on the clipboard is
+  put on the slide as an image instead, and a bare video link becomes a video).
+- Every value written to a deck passes an allowlist sanitizer (`src/lib/richtext.js`) — scripts, event handlers,
+  `javascript:` URLs and `url()` styles can never reach a slide.
+
+### Slide item animations
+- Imported decks keep their animations. `server/timing.js` walks the OOXML timing tree, resolves each
+  `<p:spTgt spid>` to the shape it points at (a group maps to all of its children) and turns it into a slide
+  `animations` timeline: one entry per effect with `kind` (entrance/exit/emphasis/path), `effect`, `direction`,
+  `duration`, `delay`, `trigger` and the click `group` it belongs to.
+- Playback follows PowerPoint's order: **→** plays the next animation step and only moves to the next slide once
+  the timeline is finished; **←** rewinds a step first, then steps back through slides (showing the previous
+  slide fully built). Clicking the slide and `Space`/`PageDown` do the same as **→**.
+- Every effect the importer can produce has a CSS keyframe — fade, fly, wipe, split, zoom, circle, dissolve,
+  peek, crawl, stretch, blinds, box, checkerboard, wheel, spiral, swivel, bounce, bars, strips, diamond, plus,
+  wedge, flash, boomerang, appear, motion paths, and the emphasis set (pulse, grow, shrink, spin, color pulse,
+  darken, lighten, transparency, underline, bold, italic, blink). Effects share a handful of parameterised
+  keyframes, so an unknown preset degrades to a fade instead of being dropped.
+- Motion paths keep their real points and move the element along the net displacement, scaled to the slide size.
+- The live audience follows the step, not just the slide, so everyone sees each item appear together.
+- **Authoring:** select any object → *Animation* in the inspector. Add an Entrance / Emphasis / Exit effect,
+  change its kind, effect, direction, start trigger, duration and delay, reorder steps with ↑/↓, and preview the
+  timeline on the canvas with the transport in the editor toolbar (play / step back / step forward / show all).
+- Steps a deck authored as **auto-playing** (a numeric group delay instead of `delay="indefinite"`) play by
+  themselves as soon as the slide appears — no extra click — and only the click steps wait for the presenter.
+
 ### Presenting
+- **Set Up Show** in the present dialog: pick the display, turn **presenter view** on or off, and build a
+  **custom show** (tick the slides to play — the deck itself is never changed).
+  - **Presenter view on** (default): the console (notes, timer, annotations, navigator, live panel) opens on your
+    display while the audience screen shows only slides.
+  - **Presenter view off**: the selected display takes over with the slides full screen and no console — the
+    single-monitor / mirror setup.
+- **Mirror vs extend is detected for you**: one display (or a primary target) is described as mirror/duplicate mode,
+  several displays as extend mode, and the dialog says where each window will appear.
 - Present dialog lists displays via the Window Management API (`getScreenDetails()`), showing labels,
-  resolutions and primary status; the presenter popup is positioned and sized onto the chosen screen and
-  requests full screen.
+  resolutions and primary status.
+- **Two windows, two displays.** The presenter console (notes, controls, animation steps, live panel) always opens
+  on the **primary display**, where you are working. The **audience output** — the real show, chrome-less and with
+  no cursor — opens on the display you selected. They stay in lockstep over a `BroadcastChannel`, including the
+  animation step, blackout and fill mode, so the audience screen always matches the console.
+- **If you select the primary display**, both windows share it: the console takes the left side and the audience
+  output opens as a windowed preview beside it, so you can still see exactly what the room sees.
+- **Full screen presentation is on by default** (when the output targets another display): the output window takes
+  over that screen like `F11`. `F` (or `F11`) toggles full screen in the console; `Esc` leaves full screen **and
+  stops presenting**, returning you to the editor.
 - Fallback for browsers without multi-screen APIs plus manual drag/full-screen guidance.
 - Presenter view: next/previous with arrows/space, progress bar, timer, speaker notes + next-slide preview,
-  blackout, fill-screen toggle, and instant exit.
-- Background images always paint **edge-to-edge across the display** (`background-size: cover`); slide content
-  is letterboxed (or fills the screen with the Fill toggle) without exposing empty bars.
+  blackout, fill-screen toggle, live table editing and instant exit. Clicking the console — or the letterbox area
+  of the output window — advances the show, animation step by animation step.
+- **On-screen tools while you present** (console toolbar and keyboard):
+  - **Annotation tools** — pointer, **laser**, **pen**, **highlighter** (six colours) and an **eraser**, drawn on an
+    overlay above the slide. Drawings are kept per slide and mirrored to the audience output *and* the live audience
+    page; **Clear** wipes the current slide.
+  - **Screen blanking** — `B` blacks the screen out, `W` turns it white, so attention goes back to you. The audience
+    output and the live audience follow.
+  - **Slide navigator** (`G`) — a thumbnail wall of the running order; click any slide to jump straight to it (also
+    within a custom show) without showing the slides in between.
+- Custom shows, blanking and annotations all travel with the show: the presenter console, the audience output window
+  and the WebSocket audience stay in step.
+- Slide backgrounds — solid colour, gradient and images — always paint **edge-to-edge across the display**;
+  slide content is letterboxed (or fills the screen with the Fill toggle) without exposing empty bars.
 - Click images/video/audio to open an expandable viewer: images zoom (25–600%, wheel, pan), video plays large,
   audio gets a full player.
 
 ### Live WebSocket audience
 - Presenter hosts a room and receives a six-character code; the audience link appears in the presenter's Live
   panel and is posted back to the share dialog.
-- Messages: `host`, `join`, `navigate`, `deck:update`, `table:update`, `pointer`, `reaction`, `presenting`, `end`.
+- Messages: `host`, `join`, `navigate`, `deck:update`, `table:update`, `pointer`, `blank`, `annotation`, `reaction`,
+  `presenting`, `end`.
 - Audience pages follow slide changes, receive in-presentation table edits instantly, see the presenter's cursor
   trail, send emoji reactions, and show the live viewer count. Auto-reconnect is built in.
 - Editor autosaves are announced over BroadcastChannel; the presenter polls the deck as a fallback and pushes
   updates to the audience, so editing while presenting updates the room live.
 
-### Shapes & image cropping
+### Shapes, containers & picture fills
 - 15 shape presets with solid/gradient fills, strokes, radius and centred text.
 - Any image can be clipped to any preset shape (CSS `clip-path`) with zoom and X/Y crop controls.
 - Select a shape and use **Fill shape with an image** to upload and mask a picture to that exact shape while
   keeping the shape's border and text.
+- **Picture fills**: any shape *and* any container (text box) can wear an image as its fill — URL or upload,
+  cover / contain / stretch / tile, with its own opacity. Shapes clip the picture to their exact outline with an
+  SVG `<pattern>`; containers paint it behind their text. The inspector can also reuse a picture already on the
+  slide, or push a picture straight to the slide background.
+- Select an image and use **Set this picture as the slide background** to paint it edge-to-edge behind the slide.
 - Images keep cover/contain fit, border, radius and opacity controls.
 
+### Online videos
+- **Insert ▸ Online video** takes a YouTube or Vimeo link and drops it on the slide at 16:9. Pasting a video link
+  anywhere on the canvas does the same thing, and a link that arrives in an imported deck is already a video.
+- The slide shows the video's poster frame (the file's own poster, or the provider's thumbnail) with a play badge;
+  one click starts the provider's player *inside* the slide — no new window, no download.
+- It plays in the editor (and in the expanded viewer), in the slide show, on the presenter console and on the live
+  audience page, so the room sees the same video as the presenter.
+- Start times in the link are honoured (`?t=90`, `#t=1m30s`), and the inspector links straight to the original
+  (`Open the link`). Playing needs an internet connection; the poster frame is shown either way.
+
 ### Editor
-- Multi-slide rail with thumbnails, add/duplicate/delete.
+- **Reorder slides by dragging**: grab any thumbnail in the rail and drop it anywhere in the list (a drop line shows
+  exactly where it will land), or use the ↑ / ↓ buttons on a thumbnail. Slides dropped inside a section join that
+  section, so sections survive reordering.
+- Multi-slide rail with thumbnails, add/duplicate/delete, plus named sections you can collapse.
+- **Right-click menus.** Right-click an object for cut/copy/paste, duplicate, delete, z-order and group; right-click
+  empty canvas for paste, select-all, a new text box, a picture, a table or an online video; right-click inside a
+  text box you are editing for cut/copy/**paste**, select-all, bold/italic/underline and clear-formatting. The menu
+  is the app's own — no browser menu, no wrong-target paste — and it flips to stay on screen.
+- **Clipboard, including pictures.** `Ctrl+V` goes through the browser's own paste event, so **a screenshot or any
+  copied picture becomes an image on the slide** (uploaded like a picture picked from disk) with no permission
+  prompt — that is the path screenshots need. The same paste takes formatted text (its formatting is kept and
+  sanitised), plain text (a text box), a video link (a video) and the app's own objects. `Ctrl+C` / `Ctrl+X` and the
+  ribbon's Clipboard group copy objects into the app's own clipboard, so a paste rebuilds them with fresh ids, an
+  offset and their own group; the text of what you copy also goes to the system clipboard for other programs.
+- Right-clicking empty canvas or an object also offers **Paste picture from the clipboard** and
+  **Paste text from the clipboard**, which read the system clipboard directly (placed where you right-clicked).
+  Browsers only allow that read from an explicit action, so it always comes from a menu click or a keypress — and if
+  the browser refuses, the app says so instead of failing silently.
+- Ribbon tabs (Home, Insert, Design, Transitions, Animations, Slide Show, Review, View, Tools) drive the common
+  commands: slides and layouts, font and paragraph formatting, shapes / pictures / media / tables, arrange,
+  backgrounds, transitions, animations, presenting, notes, zoom, panels and tools.
 - Drag, resize (8 handles), rotate, nudge with arrows, duplicate/delete, undo/redo with 80 steps.
 - Drag-and-drop images/video/audio onto the canvas; media uploads go through the server.
-- Slide backgrounds: colour, image upload/URL, cover/contain/stretch, opacity and blur.
+- Double-click the canvas to write, double-click a box to re-edit; formatting from the floating toolbar.
+- Slide background designer: colour, **gradient presets** (linear/radial with start/end colours and angle), image
+  upload/URL, cover/contain/stretch, opacity and blur.
 - Speaker notes and slide transitions.
 - Autosave (debounced) with save-state indicator and manual Ctrl/Cmd+S.
 
@@ -105,29 +320,66 @@ The inspector shows a **system** badge and the editor footer shows the active fo
 | Editor | `PageUp` / `PageDown` | Previous / next slide |
 | Editor | `Ctrl/Cmd+S` | Save now |
 | Editor | `F5` | Present dialog |
+| Editor | drag a thumbnail | Reorder slides (↑ / ↓ buttons do the same) |
+| Text box | double-click canvas | Create a text box at that point and edit it |
+| Text box | `Ctrl/Cmd+B` / `I` / `U` | Bold / italic / underline the selection |
+| Text box | `Esc` / `Ctrl/Cmd+Enter` / click outside | Save and close the editor |
 | Spreadsheet | Arrows / `Shift`+arrows | Move / select range |
 | Spreadsheet | `Enter` / `F2` / double-click | Edit cell |
 | Spreadsheet | `Tab` / `Shift+Tab` | Next / previous cell |
-| Presenter | `←` `→` `Space` `PageUp/Down` | Navigate |
-| Presenter | `N` / `B` / `L` / `H` / `F` | Notes / blackout / live panel / hide chrome / fullscreen |
-| Presenter | `Esc` | Close overlay or exit |
+| Presenter | `←` `→` `Space` `PageUp/Down` | Previous / next animation step, then slide |
+| Presenter | click console (or output letterbox) | Next animation step, then slide |
+| Presenter | `N` / `B` / `L` / `H` / `F` | Notes / blackout / live panel / hide chrome / full screen |
+| Presenter | `W` | White screen (blanking) |
+| Presenter | `G` | Slide navigator (thumbnail wall) |
+| Presenter | `Ctrl+L` / `Ctrl+P` / `Ctrl+H` / `Ctrl+E` / `Ctrl+A` | Laser / pen / highlighter / eraser / arrow pointer |
+| Presenter | `F11` | Full screen (browser full screen works too) |
+| Presenter | `Esc` | Close an overlay, otherwise leave full screen and stop presenting |
 
 ## Architecture
 
 ```
 server/
-  index.js      Express API, media storage, deck persistence, WebSocket rooms, production SPA serving
-  pptx.js       Native PPTX parser (EMU→px, theme, groups, text, pictures, tables, backgrounds)
+  index.js      Express API, media storage, deck persistence, WebSocket rooms, client delivery, app bootstrap
+  standalone.js Entry point for the packaged executable (sets production + packaged flags)
+  pptx.js       Native PPTX parser (EMU→px, theme, groups, text, pictures, tables, backgrounds, animations)
+  timing.js     OOXML `<p:timing>` reader: click groups, auto steps, effects, directions and motion paths
   demo.js       Generated first-run demo deck and assets (SVG scenery + WAV chime)
+  generated/    Inlined client build written by scripts/embed-client.mjs (git-ignored)
 shared/
   formula.js    Spreadsheet parser/evaluator, functions, number formatting, table helpers
+  animations.js Animation vocabulary shared by the importer and the editor (effects, presets, steps)
+  backgrounds.js Generated "similar" backgrounds from a theme palette (importer + editor)
 src/
   App.jsx       Tiny history router (/ , /edit/:id , /present/:id , /live/:code)
   pages/        Home, Editor, Presenter, LiveAudience
-  components/   Canvas, SlideView/ElementView, TableEditor, Inspector, PresentDialog, Stage, Lightbox…
-  lib/          API client, element factories, shape geometry, system-font discovery
-tests/          Node test suites for formulas and PPTX import
+  components/   Ribbon + DocumentTabs + Popover (window chrome), AnnotationLayer, Canvas,
+                SlideView/ElementView, TextToolbar, TableEditor, Inspector, PresentDialog, Stage, Lightbox…
+  hooks/        Undo/redo deck history, open document tabs (localStorage), workspace picture
+  lib/          API client, element factories, rich-text sanitizer, backgrounds/picture fills, animations,
+                annotations, shapes, fonts, ribbon model, slide layouts
+scripts/
+  build-exe.mjs     Bundles the server, makes the SEA blob and injects it into the Node runtime
+  embed-client.mjs  Inlines dist/ into server/generated/client-assets.js
+  make-icon.mjs     Draws the app icon (build/icon.ico + a PNG preview)
+  start-server.mjs  Cross-platform `npm start`
+  smoke-test.mjs    End-to-end checks against a running instance
+tests/          Node test suites for formulas, PPTX import, rich text, the ribbon/layout model, picture fills
+                and presenting annotations
 ```
+
+### Scripts
+
+| Script | Purpose |
+| --- | --- |
+| `npm run dev` | Development server (Vite middleware, hot reload) |
+| `npm run build` | Compile the client into `dist/` |
+| `npm start` | Production server serving `dist/` |
+| `npm run build:exe` | Build the single-file application in `build/` |
+| `npm run preview:app` | Run the packaged code path without building an executable |
+| `npm run smoke` | End-to-end checks against a running instance |
+| `npm run import:check -- <file.pptx>` | Compare an imported deck with the PowerPoint file, shape by shape |
+| `npm test` | Unit/integration test suites |
 
 ### API
 

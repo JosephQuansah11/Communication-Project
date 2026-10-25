@@ -68,6 +68,23 @@ const PATHS = {
   file: ['M14 3H6v18h12V7z', 'M14 3v4h4'],
   folder: ['M3 6h6l2 2h10v11H3z'],
   bold2: ['M7 4h6a4 4 0 1 1 0 8H7z', 'M7 12h7a4 4 0 1 1 0 8H7z'],
+  superscript: ['M3 20L8 8l5 12', 'M4.5 16h7', 'M17 8V3h4'],
+  subscript: ['M3 16L8 4l5 12', 'M4.5 12h7', 'M17 21v-5h4'],
+  listOrdered: ['M3 5h2v5H3', 'M10 7h11', 'M3 13h2v5H3', 'M10 15h11'],
+  listBullet: ['M4 7h.01', 'M4 12h.01', 'M4 17h.01', 'M10 7h10', 'M10 12h10', 'M10 17h10'],
+  highlight: ['M14 3l7 7-9 9H5v-7z', 'M3 22h18'],
+  clearFormat: ['M5 20L10 8l5 12', 'M6.5 16h7', 'M4 4l16 16'],
+  palette: ['M12 21a9 9 0 1 1 0-18c5 0 9 3.6 9 8 0 2.5-2 4-4.5 4H15a2 2 0 0 0-1.6 3.2A2 2 0 0 1 12 21', 'M7.5 11h.01', 'M11 7.5h.01', 'M15.5 9h.01'],
+  pen: ['M4 20l1-4.5L15.5 5 19 8.5 8.5 19z', 'M14 6.5L17.5 10'],
+  laser: ['M12 3v4', 'M5 8l2.5 2.5', 'M19 8l-2.5 2.5', 'M12 21a5 5 0 1 0 0-10 5 5 0 0 0 0 10', 'M12 16h.01'],
+  eraser: ['M8 20h12', 'M4 16l8-8 6 6-4 4H6z', 'M12 8l3-3 6 6-3 3'],
+  heading: ['M6 5v14', 'M14 5v14', 'M6 12h8', 'M18 19V9h-2'],
+  body: ['M4 6h16', 'M4 12h16', 'M4 18h10'],
+  group: ['M4 4h10v10H4z', 'M10 10h10v10H10z'],
+  ungroup: ['M3 3h8v8H3z', 'M13 13h8v8h-8z'],
+  marquee: ['M3 8V3h5', 'M16 3h5v5', 'M21 16v5h-5', 'M8 21H3v-5'],
+  distributeH: ['M3 4v16', 'M21 4v16', 'M12 6v12'],
+  distributeV: ['M4 3h16', 'M4 21h16', 'M6 12h12'],
 };
 
 export default function Icon({ name, size = 18, className = '', strokeWidth = 1.8, filled = false }) {

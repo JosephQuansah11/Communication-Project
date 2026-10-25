@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Icon from '../components/Icon.jsx';
 import SlideView from '../components/SlideView.jsx';
+import DocumentTabs from '../components/DocumentTabs.jsx';
+import { useDocumentTabs } from '../hooks/useDocumentTabs.js';
 import { emptyDeck, normalizeDeck } from '../lib/elements.js';
 import { deleteDeck, fetchDeck, fetchDecks, importDeck, saveDeck } from '../lib/api.js';
 
@@ -20,6 +22,13 @@ export default function Home({ navigate }) {
   const [joinCode, setJoinCode] = useState('');
   const [creating, setCreating] = useState(false);
   const fileInput = useRef(null);
+  const documentTabs = useDocumentTabs();
+
+  /** Open a deck and remember it in the window's document tab strip. */
+  const openDeck = (deck) => {
+    documentTabs.register(deck);
+    navigate(`/edit/${deck.id}`);
+  };
 
   const load = () => {
     setLoading(true);
@@ -43,7 +52,7 @@ export default function Home({ navigate }) {
     try {
       const { deck } = await importDeck(file, (progress) => setImportState((current) => ({ ...current, progress })));
       setImportState({ name: file.name, progress: 100 });
-      navigate(`/edit/${deck.id}`);
+      openDeck(deck);
     } catch (err) {
       setError(err.message);
       setImportState(null);
@@ -56,7 +65,7 @@ export default function Home({ navigate }) {
     try {
       const deck = normalizeDeck(emptyDeck('Untitled presentation'));
       const { deck: saved } = await saveDeck(deck);
-      navigate(`/edit/${saved.id}`);
+      openDeck(saved);
     } catch (err) {
       setError(err.message);
       setCreating(false);
@@ -94,17 +103,17 @@ export default function Home({ navigate }) {
     >
       <header className="home-nav">
         <a className="home-brand" href="/">
-          <span className="brand-mark"><Icon name="logo" size={22} /></span>
+          <span className="brand-mark"><Icon name="logo" size={26} /></span>
           <span>Slidesmith <em>Studio</em></span>
         </a>
         <nav className="home-nav-links">
-          <span className="nav-pill"><Icon name="font" size={13} /> System fonts</span>
-          <span className="nav-pill"><Icon name="wifi" size={13} /> WebSocket live</span>
+          <span className="nav-pill"><Icon name="font" size={16} /> System fonts</span>
+          <span className="nav-pill"><Icon name="wifi" size={16} /> WebSocket live</span>
           <button type="button" className="ghost-btn" onClick={() => fileInput.current?.click()}>
-            <Icon name="import" size={16} /> Import
+            <Icon name="import" size={19} /> Import
           </button>
           <button type="button" className="primary-btn" onClick={createNew} disabled={creating}>
-            <Icon name="plus" size={16} /> New presentation
+            <Icon name="plus" size={19} /> New presentation
           </button>
         </nav>
         <input
@@ -120,9 +129,19 @@ export default function Home({ navigate }) {
         />
       </header>
 
+      <DocumentTabs
+        tabs={documentTabs.tabs}
+        activeId={null}
+        collapsed={documentTabs.collapsed}
+        onSelect={(id) => navigate(`/edit/${id}`)}
+        onClose={(id) => documentTabs.close(id)}
+        onNew={createNew}
+        onToggleCollapse={documentTabs.setCollapsed}
+      />
+
       <section className="home-hero">
         <div className="hero-copy">
-          <span className="eyebrow"><Icon name="sparkle" size={13} /> Presentation workspace</span>
+          <span className="eyebrow"><Icon name="sparkle" size={16} /> Presentation workspace</span>
           <h1>Slides that behave like <span className="gradient-text">spreadsheets</span>, presented like magic.</h1>
           <p>
             Import PowerPoint or WPS decks, edit every object, run Excel formulas inside tables, crop images into shapes,
@@ -130,16 +149,16 @@ export default function Home({ navigate }) {
           </p>
           <div className="hero-actions">
             <button type="button" className="primary-btn large" onClick={createNew} disabled={creating}>
-              <Icon name="plus" size={18} /> Create a deck
+              <Icon name="plus" size={22} /> Create a deck
             </button>
             <button type="button" className="ghost-btn large" onClick={() => fileInput.current?.click()}>
-              <Icon name="import" size={18} /> Import PPTX / WPS
+              <Icon name="import" size={22} /> Import PPTX / WPS
             </button>
           </div>
           <div className="hero-notes">
-            <span><Icon name="check" size={13} /> No cloud account</span>
-            <span><Icon name="check" size={13} /> Files stay on your machine</span>
-            <span><Icon name="check" size={13} /> Fully keyboard driven</span>
+            <span><Icon name="check" size={16} /> No cloud account</span>
+            <span><Icon name="check" size={16} /> Files stay on your machine</span>
+            <span><Icon name="check" size={16} /> Fully keyboard driven</span>
           </div>
         </div>
         <div className="hero-visual">
@@ -164,7 +183,7 @@ export default function Home({ navigate }) {
       <section className="feature-strip">
         {FEATURES.map((feature) => (
           <div key={feature.title} className="feature-item">
-            <span className="feature-icon"><Icon name={feature.icon} size={18} /></span>
+            <span className="feature-icon"><Icon name={feature.icon} size={22} /></span>
             <div>
               <strong>{feature.title}</strong>
               <span>{feature.text}</span>
@@ -187,7 +206,7 @@ export default function Home({ navigate }) {
                 if (joinCode.trim()) navigate(`/live/${joinCode.trim().toUpperCase()}`);
               }}
             >
-              <Icon name="wifi" size={15} />
+              <Icon name="wifi" size={18} />
               <input
                 value={joinCode}
                 onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
@@ -198,16 +217,14 @@ export default function Home({ navigate }) {
               <button type="submit" className="mini-btn">Join</button>
             </form>
             <button type="button" className="ghost-btn" onClick={load}>
-              <Icon name="undo" size={15} /> Refresh
+              <Icon name="undo" size={18} /> Refresh
             </button>
           </div>
         </div>
 
-    if (file) handleImport(file);
-
         {error && (
           <div className="error-banner">
-            <Icon name="info" size={16} />
+            <Icon name="info" size={19} />
             <span>{error}</span>
             <button type="button" className="mini-btn" onClick={() => setError('')}>Dismiss</button>
           </div>
@@ -219,7 +236,7 @@ export default function Home({ navigate }) {
           </div>
         ) : decks.length === 0 ? (
           <div className="empty-library">
-            <Icon name="folder" size={36} />
+            <Icon name="folder" size={43} />
             <h3>No presentations yet</h3>
             <p>Create a blank deck or import a PowerPoint/WPS file to get started.</p>
             <div className="row-gap">
@@ -233,9 +250,9 @@ export default function Home({ navigate }) {
               <article
                 key={deck.id}
                 className="deck-card"
-                onClick={() => navigate(`/edit/${deck.id}`)}
+                onClick={() => openDeck(deck)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') navigate(`/edit/${deck.id}`);
+                  if (event.key === 'Enter') openDeck(deck);
                 }}
                 tabIndex={0}
                 role="button"
@@ -243,7 +260,7 @@ export default function Home({ navigate }) {
                 <div className="deck-thumb">
                   <DeckThumb id={deck.id} />
                   <div className="deck-hover">
-                    <span><Icon name="eye" size={22} /> Open</span>
+                    <span><Icon name="eye" size={26} /> Open</span>
                   </div>
                   <div className="deck-badges">
                     <span className="badge">{deck.slides} slides</span>
@@ -268,7 +285,7 @@ export default function Home({ navigate }) {
                       removeDeck(deck.id);
                     }}
                   >
-                    <Icon name="trash" size={15} />
+                    <Icon name="trash" size={18} />
                   </button>
                 </div>
               </article>
@@ -279,7 +296,7 @@ export default function Home({ navigate }) {
 
       <footer className="home-footer">
         <div>
-          <span className="brand-mark small"><Icon name="logo" size={15} /></span>
+          <span className="brand-mark small"><Icon name="logo" size={18} /></span>
           <span>Slidesmith Studio</span>
         </div>
         <span>PowerPoint import · Excel tables · Multi-display presenting · WebSocket live sync</span>
@@ -288,7 +305,7 @@ export default function Home({ navigate }) {
       {dragging && (
         <div className="drop-overlay">
           <div className="drop-card">
-            <Icon name="import" size={40} />
+            <Icon name="import" size={48} />
             <h2>Drop to import</h2>
             <p>.pptx, .ppt, .dps or .dpt — media is extracted automatically.</p>
           </div>
@@ -298,7 +315,7 @@ export default function Home({ navigate }) {
       {importState && (
         <div className="modal-backdrop">
           <div className="import-card">
-            <div className="import-orb"><Icon name="file" size={26} /></div>
+            <div className="import-orb"><Icon name="file" size={31} /></div>
             <h3>Importing presentation</h3>
             <p>{importState.name}</p>
             <div className="progress-track"><i style={{ width: `${Math.max(4, importState.progress)}%` }} /></div>
@@ -313,6 +330,8 @@ export default function Home({ navigate }) {
 
 function DeckThumb({ id }) {
   const [deck, setDeck] = useState(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  const boxRef = useRef(null);
   useEffect(() => {
     let alive = true;
     fetchDeck(id)
@@ -322,10 +341,26 @@ function DeckThumb({ id }) {
       alive = false;
     };
   }, [id]);
+
+  // The thumbnail fills whatever the card gives it, so the library stays legible
+  // at any window size instead of showing a small slide in a large card.
+  useEffect(() => {
+    const node = boxRef.current;
+    if (!node) return undefined;
+    const update = () => setBox({ w: node.clientWidth, h: node.clientHeight });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [deck]);
+
   if (!deck) return <div className="thumb-loading" />;
+  const scale = box.w && box.h ? Math.min(box.w / deck.width, box.h / deck.height) : 0;
   return (
-    <div className="deck-thumb-inner">
-      <SlideView slide={deck.slides[0]} width={deck.width} height={deck.height} scale={280 / deck.width} preview />
+    <div className="deck-thumb-inner" ref={boxRef}>
+      {scale > 0 && (
+        <SlideView slide={deck.slides[0]} width={deck.width} height={deck.height} scale={scale} preview />
+      )}
     </div>
   );
 }

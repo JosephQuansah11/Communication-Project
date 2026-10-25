@@ -1,4 +1,5 @@
 import ElementView from './ElementView.jsx';
+import { backgroundStyles } from '../lib/backgrounds.js';
 
 export default function SlideView({
   slide,
@@ -13,10 +14,14 @@ export default function SlideView({
   onTableDoubleClick,
   className = '',
   hideBackground = false,
+  animStep = null,
   style,
 }) {
   if (!slide) return null;
   const background = slide.background || {};
+  const { container, layer } = backgroundStyles(background);
+  const slideSize = { width, height };
+  const animations = slide.animations || [];
   return (
     <div
       className={`slide-view ${className}`}
@@ -37,24 +42,10 @@ export default function SlideView({
           transformOrigin: 'top left',
           position: 'relative',
           overflow: 'hidden',
-          backgroundColor: hideBackground ? 'transparent' : background.color || '#ffffff',
+          backgroundColor: hideBackground ? 'transparent' : container.backgroundColor,
         }}
       >
-        {!hideBackground && background.image && (
-          <div
-            className="slide-background-image"
-            style={{
-              position: 'absolute',
-              inset: 0,
-              backgroundImage: `url("${background.image}")`,
-              backgroundSize: background.fit === 'contain' ? 'contain' : background.fit === 'stretch' ? '100% 100%' : 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat',
-              opacity: background.opacity ?? 1,
-              filter: background.blur ? `blur(${background.blur}px)` : undefined,
-            }}
-          />
-        )}
+        {!hideBackground && layer && <div className="slide-background-image" style={layer} />}
         {slide.elements?.map((element) => (
           <ElementView
             key={element.id}
@@ -65,6 +56,9 @@ export default function SlideView({
             mediaInteractive={mediaInteractive}
             preview={preview}
             onTableDoubleClick={onTableDoubleClick}
+            animations={animations}
+            animStep={animStep}
+            slideSize={slideSize}
           />
         ))}
       </div>

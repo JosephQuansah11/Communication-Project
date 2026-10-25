@@ -1,8 +1,12 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import Icon from './Icon.jsx';
 import TableGrid from './TableGrid.jsx';
 import { clipPathFor, pointsAttr, SHAPE_MAP } from '../lib/shapes.js';
+import { normalizePictureFill, pictureFillCss, picturePatternLayout } from '../lib/backgrounds.js';
 import { fontStack } from '../lib/fonts.js';
+import { hasRichHtml, htmlToPlainText, sanitizeHtml, textElementHtml } from '../lib/richtext.js';
+import { animationStyle, resolveElementAnimation } from '../lib/animations.js';
+import { onlineVideoEmbedUrl, parseOnlineVideo } from '../../shared/video.js';
 
 function gradientDefs(fill, id) {
   if (typeof fill !== 'string' || !fill.startsWith('linear-gradient')) return null;
@@ -18,11 +22,49 @@ function gradientDefs(fill, id) {
   );
 }
 
+/**
+ * A picture fill inside a shape is an SVG `<pattern>` holding the image, so the
+ * picture is clipped to the exact outline of the shape (rect, ellipse, star…).
+ */
+function pictureDef(picture, id) {
+  const { patternWidth, patternHeight, preserveAspectRatio } = picturePatternLayout(picture.fit);
+  return (
+    <defs>
+      <pattern
+        id={id}
+        patternUnits="objectBoundingBox"
+        patternContentUnits="objectBoundingBox"
+        width={patternWidth}
+        height={patternHeight}
+      >
+        <image
+          href={picture.src}
+          x="0"
+          y="0"
+          width="1"
+          height="1"
+          opacity={picture.opacity}
+          preserveAspectRatio={preserveAspectRatio}
+        />
+      </pattern>
+    </defs>
+  );
+}
+
 export function ShapeArt({ element }) {
   const { shape = 'rect', fill = '#6366f1', stroke, strokeWidth = 0, radius = 0, w, h, id } = element;
-  const gradientId = `grad-${String(id || 'shape').replace(/[^a-zA-Z0-9_-]/g, '')}`;
-  const gradient = gradientDefs(fill, gradientId);
-  const solid = gradient ? `url(#${gradientId})` : fill === 'transparent' ? 'none' : fill;
+  const safeId = String(id || 'shape').replace(/[^a-zA-Z0-9_-]/g, '');
+  const gradientId = `grad-${safeId}`;
+  const pictureId = `pic-${safeId}`;
+  const picture = normalizePictureFill(element.fillImage);
+  const gradient = picture ? null : gradientDefs(fill, gradientId);
+  const solid = picture
+    ? `url(#${pictureId})`
+    : gradient
+      ? `url(#${gradientId})`
+      : fill === 'transparent'
+        ? 'none'
+        : fill;
   const strokeProps = stroke
     ? { stroke, strokeWidth: Math.max(0.5, strokeWidth || 1), vectorEffect: 'non-scaling-stroke', fill: 'none' }
     : {};
@@ -41,7 +83,7 @@ export function ShapeArt({ element }) {
 
   return (
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height="100%" style={{ display: 'block', pointerEvents: 'none' }}>
-      {gradient}
+      {picture ? pictureDef(picture, pictureId) : gradient}
       {primitive}
     </svg>
   );
@@ -51,22 +93,113 @@ function RichText({ element }) {
   if (!element.runs?.length) return element.text;
   const joined = element.runs.map((run) => run.text).join('');
   if (joined !== element.text) return element.text;
-  return element.runs.map((run, index) => (
+  return element.runs.map((run, index) => {
+    const scripted = run.superscript || run.subscript;
+    return (
+      <span
+        key={index}
+        style={{
+          fontFamily: run.fontFamily ? fontStack(run.fontFamily) : undefined,
+          fontSize: scripted ? '0.72em' : run.fontSize ? `${run.fontSize}px` : undefined,
+          color: run.color || undefined,
+          background: run.highlight || undefined,
+          fontWeight: run.bold ? 700 : undefined,
+          fontStyle: run.italic ? 'italic' : undefined,
+          textDecoration: run.underline ? 'underline' : undefined,
+          verticalAlign: run.superscript ? 'super' : run.subscript ? 'sub' : undefined,
+          whiteSpace: 'pre-wrap',
+        }}
+      >
+        {run.text}
+      </span>
+    );
+  });
+}
+
+/**
+ * Renders a text box body: formatted HTML when the box carries it, otherwise the
+ * imported runs, otherwise plain text. A `style`-level highlight/script wraps
+ * the plain fallback so box-level formatting still shows.
+ */
+function RichContent({ element }) {
+  const style = element.style || {};
+  const scripted = style.superscript || style.subscript;
+  const html = sanitizeHtml(textElementHtml(element));
+  if (hasRichHtml(html)) {
+    return <div className="rich-text" dangerouslySetInnerHTML={{ __html: html }} />;
+  }
+  if (element.runs?.length) return <RichText element={element} />;
+  const highlight = style.highlight || undefined;
+  if (!highlight && !scripted) return element.text;
+  return (
     <span
-      key={index}
       style={{
-        fontFamily: run.fontFamily ? fontStack(run.fontFamily) : undefined,
-        fontSize: run.fontSize ? `${run.fontSize}px` : undefined,
-        color: run.color || undefined,
-        fontWeight: run.bold ? 700 : undefined,
-        fontStyle: run.italic ? 'italic' : undefined,
-        textDecoration: run.underline ? 'underline' : undefined,
-        whiteSpace: 'pre-wrap',
+        background: highlight,
+        verticalAlign: style.superscript ? 'super' : style.subscript ? 'sub' : undefined,
+        fontSize: scripted ? '0.72em' : undefined,
       }}
     >
-      {run.text}
+      {element.text}
     </span>
-  ));
+  );
+}
+
+/**
+ * The padding of a text body: the per-side insets the file declared when it has
+ * them (PowerPoint's own `lIns/tIns/rIns/bIns`), otherwise the single padding the
+ * editor's controls work with.
+ */
+function elementPadding(element, fallback) {
+  const insets = element?.paddingInsets;
+  if (insets && ['top', 'right', 'bottom', 'left'].every((side) => Number.isFinite(insets[side]))) {
+    return `${insets.top}px ${insets.right}px ${insets.bottom}px ${insets.left}px`;
+  }
+  return `${element?.padding ?? fallback}px`;
+}
+
+/**
+ * An online video (a YouTube or Vimeo link) plays through the provider's own
+ * player. It starts paused behind its poster frame — one click plays it — so a
+ * show never bursts into sound on its own, and the editor stays calm.
+ */
+function OnlineVideo({ element, playing, onPlay, style }) {
+  const video = parseOnlineVideo(element.src);
+  const poster = element.poster || video?.thumbnailUrl || null;
+  if (playing) {
+    return (
+      <iframe
+        className="online-video-frame"
+        src={onlineVideoEmbedUrl(video, { autoplay: true, start: element.startAt || null })}
+        title={element.name || 'Online video'}
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+        allowFullScreen
+        referrerPolicy="strict-origin-when-cross-origin"
+        style={{ width: '100%', height: '100%', border: 0, display: 'block', ...style }}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="online-video-poster"
+      style={{ ...style, width: '100%', height: '100%', border: 0, padding: 0, cursor: 'pointer', position: 'relative' }}
+      onClick={(event) => {
+        event.stopPropagation();
+        onPlay();
+      }}
+      title="Play this video"
+    >
+      {poster ? (
+        <img src={poster} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      ) : (
+        <span className="online-video-poster-fallback" />
+      )}
+      <span className="video-play-badge">
+        <Icon name="play" size={26} filled />
+      </span>
+      <span className="video-preview-name">{element.name || 'Online video'}</span>
+    </button>
+  );
 }
 
 function MediaExpandButton({ onClick, label = 'Expand' }) {
@@ -81,7 +214,7 @@ function MediaExpandButton({ onClick, label = 'Expand' }) {
         onClick?.();
       }}
     >
-      <Icon name="expand" size={15} />
+      <Icon name="expand" size={18} />
     </button>
   );
 }
@@ -95,16 +228,51 @@ export default function ElementView({
   preview = false,
   onTableDoubleClick,
   tableHighlight,
+  editorRef,
+  animations,
+  animStep,
+  slideSize,
 }) {
   const textAreaRef = useRef(null);
+  /** True once the viewer started an online video on this slide. */
+  const [onlinePlaying, setOnlinePlaying] = useState(false);
 
   useEffect(() => {
-    if (editingText && textAreaRef.current) {
-      textAreaRef.current.focus();
-      const length = textAreaRef.current.value.length;
-      textAreaRef.current.setSelectionRange(length, length);
+    if (!editingText) return;
+    const node = textAreaRef.current;
+    if (!node) return;
+    // Seed the contenteditable once per edit session: React must not own the
+    // children or it would reset the caret on every render.
+    node.innerHTML = textElementHtml(element);
+    node.focus();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingText, element.id]);
+
+  const commitText = (options) => {
+    const node = textAreaRef.current;
+    if (!node) {
+      onTextCommit?.({ text: '', html: '' }, options);
+      return;
     }
-  }, [editingText]);
+    const html = sanitizeHtml(node.innerHTML);
+    onTextCommit?.({ html, text: htmlToPlainText(html) }, options);
+  };
+
+  // An imported (or authored) effect is applied to the element root. `animStep`
+  // is the number of click steps that have played; null means "show everything"
+  // (the editor, thumbnails and any deck without animations).
+  const resolvedAnimation =
+    typeof animStep === 'number' && animations?.length
+      ? resolveElementAnimation(animations, element.id, animStep)
+      : null;
+  const animationStyles = animationStyle(resolvedAnimation, slideSize) || null;
+  const animationClass = resolvedAnimation ? ' slide-animated' : '';
 
   const baseStyle = {
     position: 'absolute',
@@ -114,19 +282,21 @@ export default function ElementView({
     height: `${element.h}px`,
     transform: element.rotation ? `rotate(${element.rotation}deg)` : undefined,
     opacity: element.opacity ?? 1,
+    ...animationStyles,
   };
 
   if (element.type === 'shape') {
     const style = element.style || {};
     return (
-      <div className="element element-shape" style={baseStyle}>
+      <div className={`element element-shape${animationClass}`} style={baseStyle}>
         <ShapeArt element={element} />
-        {element.text ? (
+        {element.text || element.html ? (
           <div
+            className="shape-text"
             style={{
               position: 'absolute',
               inset: 0,
-              padding: `${element.padding ?? 10}px`,
+              padding: elementPadding(element, 10),
               display: 'flex',
               alignItems: style.valign === 'top' ? 'flex-start' : style.valign === 'bottom' ? 'flex-end' : 'center',
               justifyContent:
@@ -144,7 +314,7 @@ export default function ElementView({
               overflow: 'hidden',
             }}
           >
-            {element.text}
+            <RichContent element={element} />
           </div>
         ) : null}
       </div>
@@ -154,7 +324,7 @@ export default function ElementView({
   if (element.type === 'image') {
     return (
       <div
-        className={`element element-image ${element.expandable ? 'expandable' : ''}`}
+        className={`element element-image ${element.expandable ? 'expandable' : ''}${animationClass}`}
         style={{
           ...baseStyle,
           overflow: 'hidden',
@@ -195,13 +365,13 @@ export default function ElementView({
     const justify = style.valign === 'middle' ? 'center' : style.valign === 'bottom' ? 'flex-end' : 'flex-start';
     return (
       <div
-        className="element element-text"
+        className={`element element-text${animationClass}`}
         style={{
           ...baseStyle,
           background: element.fill && element.fill !== 'transparent' ? element.fill : 'transparent',
           border: element.stroke ? `${element.strokeWidth || 1}px solid ${element.stroke}` : 'none',
           borderRadius: element.radius ? `${element.radius}px` : 0,
-          padding: `${element.padding ?? 8}px`,
+          padding: elementPadding(element, 8),
           display: 'flex',
           flexDirection: 'column',
           justifyContent: justify,
@@ -209,11 +379,23 @@ export default function ElementView({
           boxSizing: 'border-box',
         }}
       >
+        {element.fillImage ? (
+          <span className="element-picture-fill" style={pictureFillCss(element.fillImage)} aria-hidden="true" />
+        ) : null}
         {editingText ? (
-          <textarea
-            ref={textAreaRef}
+          <div
+            key="editor"
+            ref={(node) => {
+              textAreaRef.current = node;
+              if (editorRef) editorRef.current = node;
+            }}
             className="inline-text-editor"
-            defaultValue={element.text}
+            contentEditable
+            suppressContentEditableWarning
+            spellCheck={false}
+            role="textbox"
+            aria-multiline="true"
+            aria-label="Edit text"
             style={{
               fontFamily: fontStack(style.fontFamily),
               fontSize: `${style.fontSize || 28}px`,
@@ -225,29 +407,56 @@ export default function ElementView({
               lineHeight: style.lineHeight || 1.25,
               letterSpacing: `${style.letterSpacing || 0}px`,
               width: '100%',
-              height: '100%',
+              minHeight: '100%',
               background: 'transparent',
               border: 'none',
               outline: 'none',
-              resize: 'none',
               padding: 0,
               overflow: 'hidden',
+              cursor: 'text',
             }}
-            onBlur={(event) => onTextCommit?.(event.target.value)}
+            onBlur={() => commitText()}
+            onPaste={(event) => {
+              const data = event.clipboardData;
+              const picture = [...(data?.files || [])].some((item) => String(item.type || '').startsWith('image/'));
+              // A picture is not text — leave it to the editor, which drops it on the
+              // slide (prevented here so the browser does not also paste it as an image tag).
+              if (picture) {
+                event.preventDefault();
+                return;
+              }
+              event.preventDefault();
+              const html = data?.getData('text/html');
+              if (html) {
+                const clean = sanitizeHtml(html);
+                if (clean && clean !== htmlToPlainText(html)) {
+                  document.execCommand('styleWithCSS', false, true);
+                  document.execCommand('insertHTML', false, clean);
+                  return;
+                }
+              }
+              document.execCommand('insertText', false, data?.getData('text/plain') || '');
+            }}
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
                 event.preventDefault();
-                onTextCommit?.(event.target.value, { cancel: true });
+                event.stopPropagation();
+                commitText({ cancel: true });
+                return;
               }
               if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                 event.preventDefault();
-                onTextCommit?.(event.target.value);
+                commitText();
+                return;
               }
+              // Let Ctrl/Cmd+S reach the editor so the deck can be saved while typing.
+              if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') return;
               event.stopPropagation();
             }}
           />
         ) : (
           <div
+            key="view"
             className="text-content"
             style={{
               fontFamily: fontStack(style.fontFamily),
@@ -265,16 +474,20 @@ export default function ElementView({
               userSelect: 'none',
             }}
           >
-            <RichText element={element} />
+            <RichContent element={element} />
           </div>
         )}
       </div>
     );
   }
   if (element.type === 'video') {
+    // A YouTube/Vimeo link plays through the provider's player; the poster frame
+    // stands in until the viewer asks for it. The link is read from `src`, so
+    // decks imported before this feature still play.
+    const online = parseOnlineVideo(element.src);
     return (
       <div
-        className="element element-video"
+        className={`element element-video${animationClass}`}
         style={{
           ...baseStyle,
           overflow: 'hidden',
@@ -291,16 +504,18 @@ export default function ElementView({
       >
         {preview ? (
           <div className="video-preview">
-            {element.poster ? (
-              <img src={element.poster} alt="" draggable={false} />
+            {element.poster || online?.thumbnailUrl ? (
+              <img src={element.poster || online.thumbnailUrl} alt="" draggable={false} />
             ) : (
               <div className="video-preview-fallback" />
             )}
             <span className="video-play-badge">
-              <Icon name="play" size={22} filled />
+              <Icon name="play" size={26} filled />
             </span>
             <span className="video-preview-name">{element.name || 'Video'}</span>
           </div>
+        ) : online ? (
+          <OnlineVideo element={element} playing={onlinePlaying} onPlay={() => setOnlinePlaying(true)} />
         ) : (
           <video
             src={element.src}
@@ -322,7 +537,7 @@ export default function ElementView({
   if (element.type === 'audio') {
     return (
       <div
-        className="element element-audio"
+        className={`element element-audio${animationClass}`}
         style={{
           ...baseStyle,
           borderRadius: `${element.radius || 16}px`,
@@ -337,7 +552,7 @@ export default function ElementView({
         }}
       >
         <span className="audio-icon">
-          <Icon name="audio" size={22} />
+          <Icon name="audio" size={26} />
         </span>
         <span className="audio-meta">
           <span className="audio-label">{element.label || element.name || 'Audio clip'}</span>
@@ -359,7 +574,7 @@ export default function ElementView({
   if (element.type === 'table') {
     return (
       <div
-        className="element element-table"
+        className={`element element-table${animationClass}`}
         style={{
           ...baseStyle,
           background: '#ffffff',
