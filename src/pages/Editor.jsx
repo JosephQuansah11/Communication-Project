@@ -8,6 +8,7 @@ import MediaLightbox from '../components/MediaLightbox.jsx';
 import PresentDialog from '../components/PresentDialog.jsx';
 import Ribbon from '../components/Ribbon.jsx';
 import RibbonPanel from '../components/RibbonPanel.jsx';
+import PanelResizer from '../components/PanelResizer.jsx';
 import MobileBar from '../components/MobileBar.jsx';
 import { INSTALL_HINTS, currentInstallRoute, promptInstall } from '../lib/install.js';
 import ContextMenu from '../components/ContextMenu.jsx';
@@ -40,6 +41,7 @@ import { SHAPES } from '../lib/shapes.js';
 import { BACKGROUND_PRESETS, gradientCss, similarBackgroundFor } from '../lib/backgrounds.js';
 import { SLIDE_LAYOUTS, applySlideLayout } from '../lib/layouts.js';
 import { KEYBOARD_SHORTCUTS } from '../lib/ribbon.js';
+import { DEFAULT_PANEL_SIZES, loadPanelSizes, panelWidthStyle, savePanelSizes } from '../lib/panels.js';
 import { detectClientPlatform, modifierKey, platformLabel, shortcutLabel } from '../../shared/platform.js';
 import {
   applyWholeHtmlStyle,
@@ -161,8 +163,8 @@ export default function Editor({ deckId, navigate }) {
   const [animStep, setAnimStep] = useState(null);
   const [ribbonTab, setRibbonTab] = useState('home');
   const [panels, setPanels] = useState(() => {
-    // A phone starts with the canvas alone — the slide rail and the tools are sheets
-    // that the bottom bar opens — while a desktop window shows them side by side.
+    // A phone starts with the canvas alone ï¿½ the slide rail and the tools are sheets
+    // that the bottom bar opens ï¿½ while a desktop window shows them side by side.
     const narrow = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 820px)')?.matches === true;
     return { rail: !narrow, inspector: !narrow, tabs: true };
   });
@@ -172,6 +174,21 @@ export default function Editor({ deckId, navigate }) {
    * full height is wanted for the inspector.
    */
   const [tabPanelOpen, setTabPanelOpen] = useState(true);
+  /**
+   * How wide the two side panels are. They can be dragged by their inner edge and the
+   * sizes are remembered, so a workspace set up for a wide slide stays that way.
+   */
+  const [panelSizes, setPanelSizes] = useState(() => loadPanelSizes());
+  /** Live drag: update the width, and only remember it once the pointer is let go. */
+  const resizePanel = (side, width) => setPanelSizes((current) => ({ ...current, [side]: width }));
+  const commitPanelSizes = () => setPanelSizes((current) => {
+    savePanelSizes(current);
+    return current;
+  });
+  const resetPanelSizes = () => {
+    setPanelSizes(DEFAULT_PANEL_SIZES);
+    savePanelSizes(DEFAULT_PANEL_SIZES);
+  };
   const [formatClip, setFormatClip] = useState(null);
   const [findQuery, setFindQuery] = useState('');
   /** Find & replace: the panel, the replacement and how it matches. */
@@ -1837,7 +1854,7 @@ export default function Editor({ deckId, navigate }) {
       const accepted = await promptInstall();
       return setToast({
         type: accepted ? 'success' : 'info',
-        message: accepted ? 'Installing QuandrionSlideMaster…' : INSTALL_HINTS.prompt,
+        message: accepted ? 'Installing QuandrionSlideMasterï¿½' : INSTALL_HINTS.prompt,
       });
     }
     return setToast({ type: route === 'installed' ? 'success' : 'info', message: INSTALL_HINTS[route] });
@@ -2864,7 +2881,10 @@ export default function Editor({ deckId, navigate }) {
   const thumbHeight = (thumbWidth * deck.height) / deck.width;
 
   return (
-    <div className={`editor-shell${panels.rail ? '' : ' rail-hidden'}${panels.inspector ? '' : ' inspector-hidden'}`}>
+    <div
+      className={`editor-shell${panels.rail ? '' : ' rail-hidden'}${panels.inspector ? '' : ' inspector-hidden'}`}
+      style={panelWidthStyle(panelSizes)}
+    >
       <Ribbon
         activeTab={ribbonTab}
         onTabChange={setRibbonTab}
@@ -2997,9 +3017,20 @@ export default function Editor({ deckId, navigate }) {
         <aside className="slide-rail">
           <div className="rail-head">
             <span>Slides</span>
-            <button type="button" className="mini-btn" onClick={addSlide} title="Add slide">
-              <Icon name="plus" size={17} />
-            </button>
+            <div className="rail-head-actions">
+              <button type="button" className="mini-btn" onClick={addSlide} title="Add slide">
+                <Icon name="plus" size={17} />
+              </button>
+              <button
+                type="button"
+                className="mini-btn rail-collapse"
+                onClick={() => handleRibbonAction('toggleRail')}
+                title="Hide the slides panel"
+                aria-label="Hide the slides panel"
+              >
+                <Icon name="chevronLeft" size={17} />
+              </button>
+            </div>
           </div>
           <div className="rail-scroll">
             {deck.slides.map((item, index) => {
@@ -3126,6 +3157,14 @@ export default function Editor({ deckId, navigate }) {
           <div className="rail-foot">
             {deck.slides.length} slide{deck.slides.length === 1 ? '' : 's'} Â· drag to reorder
           </div>
+          <PanelResizer
+            side="rail"
+            width={panelSizes.rail}
+            onChange={(width) => resizePanel('rail', width)}
+            onCommit={commitPanelSizes}
+            onReset={resetPanelSizes}
+            label="Resize the slides panel"
+          />
         </aside>
 
         <main className={`editor-center${workspace.styles ? ' has-window-picture' : ''}`}>
@@ -3209,6 +3248,7 @@ export default function Editor({ deckId, navigate }) {
             platform={platform}
             open={tabPanelOpen}
             onToggle={setTabPanelOpen}
+            onCollapse={() => handleRibbonAction('toggleInspector')}
             state={{
               toggleRail: panels.rail,
               toggleInspector: panels.inspector,
@@ -3266,7 +3306,43 @@ export default function Editor({ deckId, navigate }) {
           onUpload={upload}
           onAddShapeImage={addShapeImage}
         />
+        <PanelResizer
+          side="tools"
+          width={panelSizes.tools}
+          onChange={(width) => resizePanel('tools', width)}
+          onCommit={commitPanelSizes}
+          onReset={resetPanelSizes}
+          label="Resize the tools panel"
+        />
         </aside>
+
+        {/* With a panel hidden there is nothing left to click in the View tab if the
+            tools column is the thing that went away, so each hidden panel leaves a
+            tab on the canvas edge that brings it straight back. */}
+        {!panels.rail && (
+          <button
+            type="button"
+            className="panel-restore left"
+            onClick={() => handleRibbonAction('toggleRail')}
+            title="Show the slides panel"
+            aria-label="Show the slides panel"
+          >
+            <Icon name="chevronRight" size={16} />
+            <span>Slides</span>
+          </button>
+        )}
+        {!panels.inspector && (
+          <button
+            type="button"
+            className="panel-restore right"
+            onClick={() => handleRibbonAction('toggleInspector')}
+            title="Show the tools panel"
+            aria-label="Show the tools panel"
+          >
+            <span>Tools</span>
+            <Icon name="chevronLeft" size={16} />
+          </button>
+        )}
 
         {/* Phone layout: the panels become sheets, so this bar opens them and keeps
             the most-used actions under the thumb. Hidden on wide screens by CSS. */}

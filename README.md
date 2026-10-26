@@ -159,6 +159,18 @@ build\QuandrionSlideMaster.exe --no-open --port=3000    # or: npm run dev
 npm run smoke -- http://localhost:3000
 ```
 
+The unit suite and the browser suites drive the editor itself; each one starts its own server, so they can be run
+one after another:
+
+```bash
+npm test              # unit tests, including the panel sizes and the install route
+npm run e2e:panels    # hiding and dragging the side panels, in a desktop-sized window
+npm run e2e:mobile    # the phone layout: sheets, pinch zoom, the installable app files
+node e2e-editor-actions.mjs   # the editor's own actions, read back from the server
+node e2e-find-replace.mjs     # find & replace across the deck
+node e2e-controls-audit.mjs   # clicks every ribbon control and reports any error
+```
+
 ## What is implemented
 
 ### Window & ribbon
@@ -168,14 +180,21 @@ npm run smoke -- http://localhost:3000
 - **Clicking a tab changes the right-hand column**, not a second toolbar: the active tab's labelled groups
   (Clipboard, Slides, Font, Paragraph, Insert, Arrange, Editing, Background, Slide size, Timing, …) appear as compact
   chips above the inspector. The panel has a chevron in its header to fold it away when the inspector needs the room.
+- **The side panels are yours to size and hide.** Drag the inner edge of the slide rail or the tools column to make it
+  wider or narrower (or focus that edge and use the arrow keys — Home and End jump to the limits); double-click the
+  edge to put the panel back to its shipped width. Each header carries a hide button (the rail's **‹**, the tools
+  column's **›**), and **View ▸ Panels** toggles the same thing. A hidden panel leaves a tab on the canvas edge —
+  *Slides* on the left, *Tools* on the right — so it is always one click away, and the width you gave it is the width
+  it comes back at. Both sizes are remembered per browser, and each panel is capped at a third of the window so a wide
+  panel can never squeeze the canvas out.
+- Everything the tab panel does is reachable without it: the inspector carries the detailed controls, and **View ▸
+  Panels** hides or shows the slide rail, the inspector and the tab strip. Hiding the tools panel takes the whole
+  right-hand column with it — the tab tools and the inspector together — which is what gives the canvas the room.
 - The **File** button opens the presentation menu (new, open library, save, import, duplicate, export JSON, delete)
   and the quick-access cluster next to it holds save / undo / redo.
 - A **document tab strip** sits under the ribbon: every deck you open appears as a tab with its own accent, a × to
   close it (middle-click works too), a **+ New** button and a collapse toggle. Tabs are remembered per browser, so
   the presentations you had open come back the next time the window opens.
-- Everything the tab panel does is reachable without it: the inspector carries the detailed controls, **View ▸
-  Panels** hides or shows the slide rail, the inspector and the tab strip — hiding the inspector keeps the tab tools
-  on screen and hands its space back to the canvas.
 - **Slide layouts** (*Home ▸ Layout*) rebuild the current slide as a title slide, title + content, two content,
   section header, picture-right or blank, and **Sections** (*Home ▸ Section*) group slides into named, collapsible
   blocks in the rail.

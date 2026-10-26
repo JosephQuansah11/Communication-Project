@@ -23,6 +23,8 @@ export default function RibbonPanel({
   onToggle,
   /** Set false when the panel should stay open (a test, a kiosk view…). */
   collapsible = true,
+  /** Hides the whole right-hand column, tools and inspector together. */
+  onCollapse,
 }) {
   const tab = ribbonTab(activeTab);
   /** Tooltips are written with Ctrl; show the key this machine actually has. */
@@ -60,6 +62,17 @@ export default function RibbonPanel({
     >
       <header className="tab-panel-head">
         <span className="eyebrow">{tab.label} tools</span>
+        {onCollapse && (
+          <button
+            type="button"
+            className="ghost-btn icon-only tab-panel-collapse"
+            title="Hide the tools panel"
+            aria-label="Hide the tools panel"
+            onClick={() => onCollapse()}
+          >
+            <Icon name="chevronRight" size={18} />
+          </button>
+        )}
         {collapsible && (
           <button
             type="button"

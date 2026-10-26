@@ -169,7 +169,6 @@ function ShapeGeometry({ element, patch, onEditPoints, onToPath }) {
         {anchors} anchor{anchors === 1 ? '' : 's'} in {(element.path?.rings || []).length} ring
         {(element.path?.rings || []).length === 1 ? '' : 's'} — double-click the outline to add one, Alt-click to remove one.
       </small>
-      )}
     </>
   );
 }

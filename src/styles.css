@@ -824,13 +824,25 @@ a {
 }
 
 .editor-main {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 233px minmax(0, 1fr) 360px;
+  /* The side panels are sized by the editor itself (drag their inner edge, or hide
+     them outright) and the sizes are remembered, so the grid reads them from the
+     variables. Each is capped at a third of the window so a wide panel can never
+     squeeze the canvas out, however narrow the window gets. */
+  grid-template-columns:
+    min(var(--rail-w, 233px), 34vw)
+    minmax(0, 1fr)
+    min(var(--tools-w, 360px), 36vw);
 }
 
 .slide-rail {
+  position: relative;
+  /* Pinned to its own track: with a panel hidden its neighbour must not slide into
+     the empty one. */
+  grid-column: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -847,6 +859,11 @@ a {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--faint);
+}
+.rail-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .rail-head .mini-btn { width: 29px; height: 29px; padding: 0; }
 .rail-scroll {
@@ -933,7 +950,7 @@ a {
   font-size: 12px;
 }
 
-.editor-center { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #080d1b; }
+.editor-center { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #080d1b; grid-column: 2; }
 .insert-toolbar {
   height: 56px;
   flex: 0 0 auto;
@@ -2889,8 +2906,6 @@ input[type="range"]::-webkit-slider-thumb {
   .present-tool { min-width: 58px; font-size: 11px; }
 }
 @media (max-width: 860px) {
-  .editor-main { grid-template-columns: 1fr; }
-  .slide-rail, .inspector { display: none; }
   .present-bottombar { gap: 10px; }
   .present-tools .present-tool span { display: none; }
   .present-tool { min-width: 43px; }
@@ -3320,6 +3335,8 @@ input[type="range"]::-webkit-slider-thumb {
  * ----------------------------------------------------------------------- */
 
 .inspector-column {
+  position: relative;
+  grid-column: 3;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -3413,12 +3430,80 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 
-.editor-shell.inspector-hidden .inspector { display: none; }
-.editor-shell.rail-hidden .editor-main { grid-template-columns: minmax(0, 1fr) 360px; }
-/* Hiding the inspector keeps the column (and the tab tools in it) but hands the
-   space back to the canvas. */
-.editor-shell.inspector-hidden .editor-main { grid-template-columns: 233px minmax(0, 1fr) 300px; }
-.editor-shell.rail-hidden.inspector-hidden .editor-main { grid-template-columns: minmax(0, 1fr) 300px; }
+/* Hiding a panel hands its width to the canvas. The remembered width stays in the
+   variable, so showing the panel again brings it back exactly as wide as it was.
+   On a phone the same flags slide the sheets instead, so the display change is
+   desktop-only. */
+.editor-shell.rail-hidden .editor-main { --rail-w: 0px; }
+.editor-shell.inspector-hidden .editor-main { --tools-w: 0px; }
+@media (min-width: 821px) {
+  .editor-shell.rail-hidden .slide-rail,
+  .editor-shell.inspector-hidden .inspector-column { display: none; }
+}
+
+/* ----------------------------------------------------------------------- *
+ * Panel edges: the grab strip that resizes a panel, and the tab that brings
+ * a hidden one back
+ * ----------------------------------------------------------------------- */
+
+.panel-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  z-index: 5;
+  cursor: col-resize;
+  /* The drag is ours, not the browser's: no text selection, no panning. */
+  touch-action: none;
+  user-select: none;
+}
+.panel-resizer.rail { right: 0; }
+.panel-resizer.tools { left: 0; }
+/* A hairline that only shows itself when the edge is worth grabbing. */
+.panel-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background 0.15s ease;
+}
+.panel-resizer:hover::after,
+.panel-resizer:focus-visible::after { background: rgba(129, 140, 248, 0.75); }
+.panel-resizer:focus-visible { outline: none; }
+
+.panel-restore {
+  position: absolute;
+  top: 50%;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 6px;
+  transform: translateY(-50%);
+  border: 1px solid var(--line);
+  background: #111a2e;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.panel-restore span { writing-mode: vertical-rl; }
+.panel-restore.left { left: 0; border-left: none; border-radius: 0 10px 10px 0; }
+.panel-restore.right { right: 0; border-right: none; border-radius: 10px 0 0 10px; }
+.panel-restore:hover {
+  color: #ffffff;
+  border-color: rgba(129, 140, 248, 0.55);
+  background: rgba(99, 102, 241, 0.2);
+}
+.panel-restore:focus-visible { outline: 2px solid #818cf8; outline-offset: 2px; }
+
 
 .shortcuts-card {
   width: min(560px, 92vw);
@@ -3462,12 +3547,12 @@ input[type="range"]::-webkit-slider-thumb {
 @media (min-width: 821px) and (max-width: 860px) {
   .ribbon-right .deck-title-input,
   .ribbon-right .save-state { display: none; }
-  /* The rail is hidden anyway; the tools column stays so the tab panels are still
-     reachable, just narrower. */
-  .editor-shell.rail-hidden .editor-main,
-  .editor-shell.inspector-hidden .editor-main,
-  .editor-shell.rail-hidden.inspector-hidden .editor-main { grid-template-columns: minmax(0, 1fr) 260px; }
+  /* The columns keep whatever width they were dragged to; the min() caps in
+     .editor-main are what stop them crowding the canvas out on a window this
+     narrow. */
   .tab-panel { max-height: 34vh; }
+}
+
 /* ------------------------------------------------------------------ *
  * Find & replace
  * ------------------------------------------------------------------ */
@@ -3775,9 +3860,6 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 
-}
-
-
 /* ----------------------------------------------------------------------- *
  * Floating menus
  *
@@ -3807,6 +3889,18 @@ input[type="range"]::-webkit-slider-thumb {
 .context-item {
   display: flex;
   align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+}
 
 /* ----------------------------------------------------------------------- *
  * Vector Edit handles
@@ -3865,6 +3959,10 @@ input[type="range"]::-webkit-slider-thumb {
     /* Room for the bottom bar, and the phone's gesture area under it. */
     padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
   }
+  /* One track only: the canvas is not placed in a second column here. */
+  .editor-center {
+    grid-column: auto;
+  }
 
   /* The top row keeps the file button, the tabs and the title; the rest is in the
      tab panel, which is now a sheet like the others. */
@@ -3890,10 +3988,18 @@ input[type="range"]::-webkit-slider-thumb {
     top: 0;
     bottom: 0;
     z-index: 40;
+    /* The desktop columns are display:none when their panel is hidden; a sheet is
+       shown and hidden by sliding instead, so it has to stay laid out. */
+    display: flex;
     width: min(88vw, 340px);
     max-width: none;
     box-shadow: 0 24px 60px rgba(2, 6, 23, 0.6);
     transition: transform 0.22s ease;
+  }
+  /* A sheet is opened from the bottom bar, not resized by dragging an edge. */
+  .panel-resizer,
+  .panel-restore {
+    display: none;
   }
   .slide-rail {
     left: 0;
@@ -4000,12 +4106,8 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 /* A tablet in landscape has room for two columns: slides and canvas, with the tools
-   still as a sheet. */
-@media (min-width: 821px) and (max-width: 1100px) and (pointer: coarse) {
-  .editor-main {
-    grid-template-columns: 200px minmax(0, 1fr) 320px;
-  }
-}
+   still as a sheet. No widths of its own any more — the panels keep whatever size
+   they were given, and the min() caps in .editor-main keep the canvas usable. */
 
 
 .node-editor .node-bend.curved {
@@ -4013,18 +4115,6 @@ input[type="range"]::-webkit-slider-thumb {
   stroke: #ea580c;
 }
 
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 550;
-  text-align: left;
-  cursor: pointer;
-}
 .context-item:hover:not(:disabled),
 .context-item.active:not(:disabled) { background: rgba(99, 102, 241, 0.22); }
 .context-item:disabled { opacity: 0.38; cursor: default; }
