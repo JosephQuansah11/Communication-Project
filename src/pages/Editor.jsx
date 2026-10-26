@@ -981,6 +981,13 @@ export default function Editor({ deckId, navigate }) {
     },
     { separator: true },
     {
+      id: 'fillTextWithPicture',
+      label: 'Fill text with picture',
+      icon: 'text',
+      disabled: selectedElements.length < 2,
+      onSelect: fillTextWithPicture,
+    },
+    {
       id: 'maskShape',
       label: 'Mask a picture',
       icon: 'mask',
@@ -1678,6 +1685,44 @@ export default function Editor({ deckId, navigate }) {
   };
 
   /** Fill the selected shape with the selected picture — Figma's "use as mask". */
+  /**
+   * Put a picture inside the words of a text box.
+   *
+   * The picture becomes the text's fill and is removed from the slide, so the word
+   * itself is what you see — the photo is cut to the exact shape of whatever has been
+   * typed. It is one undo step, and the text stays editable afterwards.
+   */
+  const fillTextWithPicture = () => {
+    const chosen = (slide?.elements || []).filter((element) => selectedIds.includes(element.id));
+    const text = chosen.find((element) => element.type === 'text');
+    const picture = chosen.find((element) => element.type === 'image');
+    if (!text || !picture) {
+      setToast({ type: 'error', message: 'Select a text box and a picture to fill the words with it.' });
+      return;
+    }
+    commitTextEdit();
+    apply((current) => ({
+      ...current,
+      slides: current.slides.map((item) =>
+        item.id !== slideId
+          ? item
+          : {
+              ...item,
+              // The picture is gone from the slide; the text box carries it instead.
+              elements: item.elements
+                .filter((element) => element.id !== picture.id)
+                .map((element) =>
+                  element.id !== text.id
+                    ? element
+                    : { ...element, textImage: { src: picture.src, fit: picture.fit || 'cover', scale: 1, x: 0, y: 0 } }
+                ),
+            }
+      ),
+    }));
+    setSelectedId(text.id);
+    setToast({ type: 'success', message: 'The picture now fills the words — edit the text and the shape follows.' });
+  };
+
   const maskWithShape = () => {
     const shapes = (slide?.elements || []).filter((element) => selectedIds.includes(element.id));
     const shape = shapes.find((element) => element.type === 'shape');
@@ -3177,6 +3222,7 @@ export default function Editor({ deckId, navigate }) {
           grouped={hasGroup(slideElements, selectedIds)}
           onCombine={combineShapes}
           onMask={maskWithShape}
+          onFillText={fillTextWithPicture}
           onPatchTextStyle={patchTextStyle}
           animations={slideAnimations}
           animStep={animStep}

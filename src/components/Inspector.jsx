@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
 import { SHAPES, SHAPE_POINTS } from '../lib/shapes.js';
 import { SHAPE_OPS } from '../lib/paths.js';
+import { TEXT_FITS } from '../lib/textmask.js';
 import { BACKGROUND_PRESETS, describeBackground, gradientCss, normalizePictureFill, similarBackgroundFor } from '../lib/backgrounds.js';
 import {
   ANIMATION_KINDS,
@@ -312,11 +313,14 @@ export default function Inspector({
   onAddShapeImage,
   onCombine,
   onMask,
+  onFillText,
   onEditPoints,
   onToPath,
 }) {
   const bgInput = useRef(null);
   const mediaInput = useRef(null);
+  /** Picture shown through a text box's letters. */
+  const textImageInput = useRef(null);
   const shapeImageInput = useRef(null);
   const patch = (changes) => onPatchElement?.(changes);
   const patchStyle = (changes) => patch({ style: { ...(element?.style || {}), ...changes } });
@@ -448,6 +452,9 @@ export default function Inspector({
             ))}
           </div>
           <div className="row-gap wrap">
+            <button type="button" className="wide-btn" onClick={() => onFillText?.()} title="Cut the picture to the shape of the words">
+              <Icon name="text" size={17} /> Fill text with picture
+            </button>
             <button type="button" className="wide-btn" onClick={() => onMask?.()} title="Fill the shape with the picture">
               <Icon name="mask" size={17} /> Mask a picture
             </button>
@@ -908,6 +915,77 @@ export default function Inspector({
               suffix="px"
             />
           </div>
+        </Section>
+      )}
+
+      {element.type === 'text' && (
+        <Section title="Picture in text" defaultOpen={false}>
+          <div className="field">
+            <label>{element.textImage?.src ? 'Replace the picture' : 'Show a picture through the letters'}</label>
+            <button type="button" className="wide-btn" onClick={() => textImageInput.current?.click()}>
+              <Icon name="image" size={18} /> {element.textImage?.src ? 'Choose a new picture' : 'Choose a picture'}
+            </button>
+            <input
+              ref={textImageInput}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (!file) return;
+                const asset = await onUpload(file);
+                if (asset?.url) patch({ textImage: { ...(element.textImage || {}), src: asset.url } });
+              }}
+            />
+            <small className="field-hint">
+              The picture is cut to the exact shape of the words — whatever is typed becomes the window, so
+              “dynamic” shows the photo in the letters themselves. The text stays editable.
+            </small>
+          </div>
+          {element.textImage?.src && (
+            <>
+              <div className="field">
+                <label>Fit</label>
+                <select
+                  className="text-input"
+                  value={element.textImage.fit || 'cover'}
+                  onChange={(event) => patch({ textImage: { ...element.textImage, fit: event.target.value } })}
+                >
+                  {TEXT_FITS.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.label}</option>
+                  ))}
+                </select>
+              </div>
+              <SliderField
+                label="Zoom"
+                value={(element.textImage.scale || 1) * 100}
+                min={10}
+                max={400}
+                suffix="%"
+                onChange={(value) => patch({ textImage: { ...element.textImage, scale: value / 100 } })}
+              />
+              <SliderField
+                label="Position X"
+                value={element.textImage.x || 0}
+                min={-100}
+                max={100}
+                suffix="%"
+                onChange={(value) => patch({ textImage: { ...element.textImage, x: value } })}
+              />
+              <SliderField
+                label="Position Y"
+                value={element.textImage.y || 0}
+                min={-100}
+                max={100}
+                suffix="%"
+                onChange={(value) => patch({ textImage: { ...element.textImage, y: value } })}
+              />
+              <button type="button" className="wide-btn" onClick={() => patch({ textImage: null })}>
+                <Icon name="close" size={16} /> Show the text on its own again
+              </button>
+            </>
+          )}
         </Section>
       )}
 

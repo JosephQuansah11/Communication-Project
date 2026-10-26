@@ -347,6 +347,14 @@ shape — a fill (or a picture fill), a border, text, rotation and animation all
 - **Pen tool.** *Insert ▸ Shape tools ▸ Pen* draws a shape point by point: click for a corner, click-and-drag to pull
   bezier handles out of the point, click the first dot again (or press Enter) to close it, Esc to throw it away and
   Backspace to drop the last point. A shape you leave open is drawn as a line.
+- **Pictures cut to the shape of your words.** A text box can carry a picture as its fill: type **dynamic** and the
+  photo shows through the letters themselves, cut to the exact outline of what you typed — the letters are the
+  window, so a new word is a new shape with no redrawing. Set it up from the inspector's *Picture in text* section
+  (choose a picture, then Fit, Zoom, Position X/Y, and *Show the text on its own again* to switch back), or select a
+  picture **and** a text box and use *Fill text with picture* from the inspector's Combine section or the right-click
+  menu — the picture leaves the slide and becomes the text's fill in one undo step. The text stays editable, so
+  rewriting a word reshapes the picture. The browser clips it with `background-clip: text`, which keeps the letters
+  crisp at any size and works in the slideshow and the presenter's preview too.
 - **Shapes and pictures move, resize and rotate** — the familiar selection box with corner and edge handles, a rotate
   handle and a live size read-out. A picture keeps its proportions when it is grown from a corner (Shift or Alt
   stretches it freely), and its corner radius, clip shape, border and crop all come from the inspector.

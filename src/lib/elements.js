@@ -69,6 +69,8 @@ export function createText(overrides = {}) {
     rotation: 0,
     opacity: 1,
     text: 'Double-click to edit',
+    /** A picture shown through the letters, when the box is used as a text mask. */
+    textImage: null,
     html: null,
     style: { ...DEFAULT_STYLE, fontSize: 40, bold: true },
     fill: 'transparent',

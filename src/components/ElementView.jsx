@@ -6,6 +6,7 @@ import { ringsToD, shapeLocalRings } from '../lib/paths.js';
 import { normalizePictureFill, pictureFillCss, picturePatternLayout } from '../lib/backgrounds.js';
 import { fontStack } from '../lib/fonts.js';
 import { hasRichHtml, htmlToPlainText, sanitizeHtml, textElementHtml } from '../lib/richtext.js';
+import { hasTextPicture, textMaskStyle } from '../lib/textmask.js';
 import { animationStyle, resolveElementAnimation } from '../lib/animations.js';
 import { onlineVideoEmbedUrl, parseOnlineVideo } from '../../shared/video.js';
 
@@ -376,6 +377,10 @@ export default function ElementView({
   }
 
   if (element.type === 'text') {
+    // A text box with a picture fill shows the photo through its letters: the words
+    // are painted transparent and the picture behind them is clipped to the glyphs,
+    // so the picture takes the exact shape of what has been typed.
+    const masked = hasTextPicture(element) && !editingText;
     const style = element.style || {};
     const justify = style.valign === 'middle' ? 'center' : style.valign === 'bottom' ? 'flex-end' : 'flex-start';
     return (
@@ -472,11 +477,11 @@ export default function ElementView({
         ) : (
           <div
             key="view"
-            className="text-content"
+            className={`text-content${masked ? ' text-masked' : ''}`}
             style={{
               fontFamily: fontStack(style.fontFamily),
               fontSize: `${style.fontSize || 28}px`,
-              color: style.color || '#0f172a',
+              color: masked ? 'transparent' : style.color || '#0f172a',
               fontWeight: style.bold ? 700 : 400,
               fontStyle: style.italic ? 'italic' : 'normal',
               textDecoration: style.underline ? 'underline' : 'none',
@@ -487,9 +492,10 @@ export default function ElementView({
               wordBreak: 'break-word',
               width: '100%',
               userSelect: 'none',
+              ...(masked ? textMaskStyle(element.textImage) : null),
             }}
           >
-            <RichContent element={element} />
+            {masked ? htmlToPlainText(textElementHtml(element)) : <RichContent element={element} />}
           </div>
         )}
       </div>
