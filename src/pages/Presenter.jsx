@@ -224,6 +224,9 @@ export default function Presenter({ deckId, navigate }) {
     if (isOutput) channel.postMessage({ type: 'hello' });
     return () => {
       if (isOutput) channel.postMessage({ type: 'closed' });
+      // The console closing (Esc, the exit button or the window's ×) takes the
+      // audience window with it.
+      else channel.postMessage({ type: 'ended' });
       channel.onmessage = null;
       channel.close();
       showChannel.current = null;
@@ -566,6 +569,13 @@ export default function Presenter({ deckId, navigate }) {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'end' }));
     }
+    // Tell the other window of the pair, so ending the show from either side takes
+    // both of them down.
+    try {
+      showChannel.current?.postMessage({ type: 'ended' });
+    } catch {
+      /* the channel may already be gone */
+    }
     if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
     // The show window closes itself when the presentation ends â€” Esc, the End
     // presentation button and the last slide all come through here. A browser only
@@ -758,6 +768,17 @@ export default function Presenter({ deckId, navigate }) {
         event.preventDefault();
         if (isOutput) showChannel.current?.postMessage({ type: 'prev' });
         else retreat();
+      }
+      // Esc ends the show from the audience window too: it tells the console, which
+      // ends the session, and closes itself either way.
+      if (key === 'Escape' && isOutput) {
+        event.preventDefault();
+        try {
+          showChannel.current?.postMessage({ type: 'exit' });
+        } catch {
+          /* the console may already be gone */
+        }
+        exit();
       }
       if (isOutput) return;
       const mod = event.ctrlKey || event.metaKey;

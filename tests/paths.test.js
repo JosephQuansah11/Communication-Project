@@ -12,6 +12,7 @@ import {
   polygonBoolean,
   rectRings,
   ringFromPoints,
+  shapeLocalRings,
   ringPolyline,
   ringsBounds,
   ringsPolylines,
@@ -332,3 +333,41 @@ test('simplifying drops the points that carry no shape', () => {
 });
 
 
+
+test('a picture outlines itself the way it is clipped and rounded', () => {
+  const picture = { type: 'image', x: 0, y: 0, w: 200, h: 100, radius: 0 };
+  const curved = (rings) => (rings[0].points || []).some((point) => point.in || point.out);
+
+  // Plain picture: the bare box, so the dots sit on its corners.
+  const box = shapeLocalRings(picture);
+  assert.equal(box.length, 1);
+  assert.equal(box[0].points.length, 4);
+  assert.equal(curved(box), false);
+
+  // Clipped into an ellipse: the dots follow the ellipse, not the box.
+  const clipped = shapeLocalRings({ ...picture, clipShape: 'ellipse' });
+  assert.equal(curved(clipped), true, 'a clipped picture curves its outline');
+  const ellipse = shapeLocalRings({ type: 'shape', shape: 'ellipse', w: 200, h: 100 });
+  assert.deepEqual(clipped, ellipse, 'a clipped picture uses the same outline as the shape');
+
+  // A rounded picture rounds its own outline, which is what the dots sit on.
+  assert.equal(curved(shapeLocalRings({ ...picture, radius: 30 })), true, 'a rounded picture curves its corners');
+  assert.equal(
+    curved(shapeLocalRings({ ...picture, corners: { tl: 40, tr: 0, br: 0, bl: 0 } })),
+    true,
+    'one rounded corner is enough to curve the outline'
+  );
+
+  // A picture clipped into a preset polygon follows that polygon.
+  const star = shapeLocalRings({ ...picture, clipShape: 'star5' });
+  const starShape = shapeLocalRings({ type: 'shape', shape: 'star5', w: 200, h: 100 });
+  assert.deepEqual(star, starShape);
+  assert.ok(star[0].points.length >= 10, 'the star keeps its points');
+});
+
+test('a video is outlined by its clip shape too', () => {
+  const video = { type: 'video', w: 200, h: 100, clipShape: 'roundRect' };
+  const rings = shapeLocalRings(video);
+  const shape = shapeLocalRings({ type: 'shape', shape: 'roundRect', w: 200, h: 100 });
+  assert.deepEqual(rings, shape);
+});

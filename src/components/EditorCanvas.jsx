@@ -53,8 +53,13 @@ const cornerList = (element) => {
 };
 
 /** Corner widgets only make sense on a rectangle, where Figma offers four of them. */
-const hasCornerWidgets = (element) =>
-  element?.type === 'shape' && (!element.shape || element.shape === 'rect' || element.shape === 'roundRect');
+const hasCornerWidgets = (element) => {
+  // Rects and round-rects round their own corners; a picture does too while it is
+  // not clipped into a preset outline.
+  if (element?.type === 'shape') return !element.shape || element.shape === 'rect' || element.shape === 'roundRect';
+  if (element?.type === 'image' || element?.type === 'video') return !element.clipShape || element.clipShape === 'none';
+  return false;
+};
 
 /**
  * The Vector Edit overlay that sits on top of the object being reshaped.
@@ -1026,13 +1031,14 @@ export default function EditorCanvas({
                     !isMulti &&
                     !editingTextId &&
                     tool === 'select' &&
-                    pointEditId !== element.id &&
                     hasCornerWidgets(element) &&
                     CORNERS.map((corner) => {
                       const radius = cornerList(element)[corner.key] || 0;
                       // The widget sits on the middle of the corner's arc, nudged clear
                       // of the resize handle that shares the corner.
-                      const inset = Math.max(7, radius * 0.2929 + 3);
+                      // With the edit dots on, the rounding dot steps further inside so it
+                      // never sits under the corner anchor.
+                      const inset = Math.max(pointEditId === element.id ? 20 : 7, radius * 0.2929 + 3);
                       const size = 9 / scale;
                       return (
                         <span

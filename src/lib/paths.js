@@ -49,11 +49,22 @@ function cornersOf(element = {}) {
   return element.radius || 0;
 }
 
-/** Rings in the element's own box (0..w, 0..h) — what the renderer draws. */
+/**
+ * Rings in the element's own box (0..w, 0..h) — what the renderer draws.
+ *
+ * A picture or a video is clipped by its *clip shape* and rounded by its radius
+ * rather than by `shape`, so its outline — and every dot that sits on it — follows
+ * what is actually on screen instead of the bare box.
+ */
 export function shapeLocalRings(element = {}) {
   const w = Number(element.w) || 100;
   const h = Number(element.h) || 100;
-  const shape = element.shape || 'rect';
+  const media = element.type === 'image' || element.type === 'video';
+  const shape = media
+    ? element.clipShape && element.clipShape !== 'none'
+      ? element.clipShape
+      : 'rect'
+    : element.shape || 'rect';
   if (shape === 'path') {
     const rings = element.path?.rings || [];
     // A path with no geometry yet still has to draw something.

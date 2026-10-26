@@ -329,6 +329,8 @@ export default function ElementView({
   }
 
   if (element.type === 'image') {
+    const clipped = element.clipShape && element.clipShape !== 'none';
+    const corners = element.corners;
     return (
       <div
         className={`element element-image ${element.expandable ? 'expandable' : ''}${animationClass}`}
@@ -336,7 +338,13 @@ export default function ElementView({
           ...baseStyle,
           overflow: 'hidden',
           clipPath: clipPathFor(element.clipShape) || undefined,
-          borderRadius: element.clipShape && element.clipShape !== 'none' ? 0 : `${element.radius || 0}px`,
+          // Per-corner radii win over the single radius, so the canvas rounding dots
+          // can shape one corner of a picture at a time.
+          borderRadius: clipped
+            ? 0
+            : corners
+              ? `${corners.tl || 0}px ${corners.tr || 0}px ${corners.br || 0}px ${corners.bl || 0}px`
+              : `${element.radius || 0}px`,
           border: element.stroke ? `${element.strokeWidth || 1}px solid ${element.stroke}` : 'none',
           boxSizing: 'border-box',
           cursor: element.expandable ? 'zoom-in' : undefined,

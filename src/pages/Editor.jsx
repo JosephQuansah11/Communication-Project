@@ -315,6 +315,9 @@ export default function Editor({ deckId, navigate }) {
    * group can still be dragged as a whole.
    */
   const selectElement = (id, { toggle = false } = {}) => {
+    // A new selection always opens Vector Edit again, so picking an object up after
+    // locking it shows its dots rather than remembering the old lock.
+    pointEditRef.current = { auto: null, locked: null };
     if (!id) return setSelectedIds([]);
     const members = expandGroups(slideElements, [id]);
     setSelectedIds((current) => {
@@ -1885,14 +1888,50 @@ export default function Editor({ deckId, navigate }) {
     setToast({ type: 'success', message: `Transition “${transition}” applied to every slide.` });
   };
 
+  /**
+   * One-click present (the ribbon's *Present in full screen*): the management window
+   * opens on this display and the audience window takes the screen, already full
+   * screen — the same pair the Present dialog opens.
+   */
   const startPresentInWindow = () => {
-    const win = window.open(
+    const chromeOff = 'menubar=no,toolbar=no,location=no,status=no,scrollbars=no,resizable=yes';
+    const view = window.screen || {};
+    const width = view.availWidth || 1280;
+    const height = view.availHeight || 720;
+    const left = view.availLeft || 0;
+    const top = view.availTop || 0;
+    const consoleWidth = Math.max(720, Math.round(width * 0.6));
+    const consoleHeight = Math.max(520, Math.round(height * 0.9));
+    const consoleWin = window.open(
+      `/present/${deck.id}?live=1&fs=0`,
+      `slidesmith-console-${deck.id}`,
+      `popup=yes,width=${consoleWidth},height=${consoleHeight},left=${left + 12},top=${top + 12},${chromeOff}`
+    );
+    const outputWin = window.open(
       `/present/${deck.id}?output=1&fs=1`,
       `slidesmith-output-${deck.id}`,
-      'popup=yes,width=1280,height=720'
+      `popup=yes,width=${width},height=${height},left=${left},top=${top},${chromeOff}`
     );
-    if (win) setToast({ type: 'success', message: 'The show is running in its own window.' });
-    else setToast({ type: 'error', message: 'Allow pop-ups to start the show in its own window.' });
+    if (consoleWin && outputWin) {
+      try {
+        outputWin.focus();
+        consoleWin.focus();
+      } catch {
+        /* window managers differ */
+      }
+      return setToast({
+        type: 'success',
+        message: 'Presenting: the management window and the full-screen show are both open. Esc in either closes both.',
+      });
+    }
+    if (outputWin) {
+      outputWin.focus();
+      return setToast({
+        type: 'info',
+        message: 'The show is running full screen. Allow pop-ups for this site to get the management window as well.',
+      });
+    }
+    return setToast({ type: 'error', message: 'Allow pop-ups to start the show in its own window.' });
   };
 
   /** Every ribbon control funnels through here. */
