@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
  * next time the window opens, and a `storage` listener keeps a second window
  * (library or presenter) in sync.
  */
-const STORAGE_KEY = 'slidesmith:window-tabs';
+const STORAGE_KEY = 'quandrion:window-tabs';
 const MAX_TABS = 12;
 
 function read() {

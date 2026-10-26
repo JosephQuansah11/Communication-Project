@@ -1,5 +1,5 @@
 /**
- * End-to-end smoke test for a running Slidesmith Studio instance.
+ * End-to-end smoke test for a running QuandrionSlideMaster instance.
  *
  * Works against the dev server, a production server, or the packaged
  * application: it exercises static delivery, the deck API, media upload,

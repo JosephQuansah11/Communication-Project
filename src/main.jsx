@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import './styles.css';
+import { startPresence } from './lib/presence.js';
 
 class Boundary extends React.Component {
   constructor(props) {
@@ -12,7 +13,7 @@ class Boundary extends React.Component {
     return { error };
   }
   componentDidCatch(error) {
-    console.error('Slidesmith render error', error);
+    console.error('QuandrionSlideMaster render error', error);
   }
   render() {
     if (this.state.error) {
@@ -33,5 +34,10 @@ try {
     </Boundary>
   );
 } catch (error) {
+
+// The packaged app shuts itself down when the last window closes, so no invisible
+// process is left holding the executable open.
+startPresence();
+
   console.error(error);
 }

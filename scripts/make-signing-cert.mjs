@@ -2,7 +2,7 @@
  * Create a self-signed code-signing certificate for the app's publisher.
  *
  * A certificate is what gives the executable a publisher: Windows reads the name
- * out of the signature, so `Slidesmith.exe` signed with a certificate whose subject
+ * out of the signature, so `QuandrionSlideMaster.exe` signed with a certificate whose subject
  * is `CN=josephQuansah11` shows josephQuansah11 as its publisher.
  *
  * A self-signed certificate is enough for that name to appear, and it stops the
@@ -21,7 +21,7 @@ import { PUBLISHER, psQuote } from './sign-exe.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publisher = process.argv[2] || PUBLISHER;
-const password = process.argv[3] || 'slidesmith';
+const password = process.argv[3] || 'quandrion';
 const certDir = path.join(root, 'build', 'certs');
 const pfxPath = path.join(certDir, `${publisher.replace(/[^a-z0-9._-]+/gi, '-')}.pfx`);
 
@@ -61,7 +61,7 @@ console.log('   Sign the packaged app with it:');
 console.log(`     $env:SLIDESMITH_CERT_PFX="${pfxPath}"`);
 console.log(`     $env:SLIDESMITH_CERT_PASSWORD="${password}"`);
 console.log('     npm run build:exe        # signs the exe as it builds');
-console.log('     npm run sign:exe         # or sign an existing build/Slidesmith.exe');
+console.log('     npm run sign:exe         # or sign an existing build/QuandrionSlideMaster.exe');
 console.log('');
 console.log('   Trust it on your own machine so Windows stops calling it unverified:');
 console.log(`     Import-Certificate -FilePath (Export-Certificate -Cert (Get-Item Cert:\\CurrentUser\\My\\${thumbprint}) -FilePath "$env:TEMP\\${publisher}.cer") -CertStoreLocation Cert:\\LocalMachine\\Root`);

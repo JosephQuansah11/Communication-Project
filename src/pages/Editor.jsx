@@ -240,7 +240,7 @@ export default function Editor({ deckId, navigate }) {
   useEffect(() => {
     if (!deck) return undefined;
     try {
-      channel.current = new BroadcastChannel(`slidesmith-${deckId}`);
+      channel.current = new BroadcastChannel(`quandrion-${deckId}`);
     } catch {
       channel.current = null;
     }
@@ -1915,12 +1915,12 @@ export default function Editor({ deckId, navigate }) {
     const consoleHeight = Math.max(520, Math.round(height * 0.9));
     const consoleWin = window.open(
       `/present/${deck.id}?live=1&fs=0`,
-      `slidesmith-console-${deck.id}`,
+      `quandrion-console-${deck.id}`,
       `popup=yes,width=${consoleWidth},height=${consoleHeight},left=${left + 12},top=${top + 12},${chromeOff}`
     );
     const outputWin = window.open(
       `/present/${deck.id}?output=1&fs=1`,
-      `slidesmith-output-${deck.id}`,
+      `quandrion-output-${deck.id}`,
       `popup=yes,width=${width},height=${height},left=${left},top=${top},${chromeOff}`
     );
     if (consoleWin && outputWin) {
@@ -3020,7 +3020,7 @@ export default function Editor({ deckId, navigate }) {
         brand={
           <button type="button" className="brand-mini" onClick={() => navigate('/')} title="Back to library">
             <span className="brand-mark"><Icon name="logo" size={24} /></span>
-            <span className="brand-name">Slidesmith</span>
+            <span className="brand-name">QuandrionSlideMaster</span>
           </button>
         }
         quick={

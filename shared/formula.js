@@ -1,5 +1,5 @@
 /**
- * Tiny spreadsheet engine used by Slidesmith Studio tables.
+ * Tiny spreadsheet engine used by QuandrionSlideMaster tables.
  * Supports A1 references, ranges, arithmetic/comparison/text operators and
  * ~40 Excel-compatible functions. Formulas are stored per cell and evaluated
  * with cycle detection, so presentation tables behave like real spreadsheets.

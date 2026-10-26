@@ -2,7 +2,7 @@
  * Authenticode signing for the packaged app.
  *
  * Smart App Control and SmartScreen judge the *signature*, not the version
- * resource: an unsigned `Slidesmith.exe` is "an app we couldn't find a publisher
+ * resource: an unsigned `QuandrionSlideMaster.exe` is "an app we couldn't find a publisher
  * for" whatever `CompanyName` says. Signing the file is what puts a publisher on
  * it — the name Windows shows is the subject of the certificate that signed it.
  *
@@ -18,7 +18,7 @@
  *   SLIDESMITH_SIGN_COMMAND    a command to run instead, with {file} as the path
  *   SLIDESMITH_REQUIRE_SIGNING 1 to make a build fail when signing is not configured
  *
- * Usage: node scripts/sign-exe.mjs build/Slidesmith.exe
+ * Usage: node scripts/sign-exe.mjs build/QuandrionSlideMaster.exe
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -182,9 +182,9 @@ export async function signFile(file, { env = process.env, log = console.log } = 
   }
 }
 
-/** Command-line use: `node scripts/sign-exe.mjs build/Slidesmith.exe`. */
+/** Command-line use: `node scripts/sign-exe.mjs build/QuandrionSlideMaster.exe`. */
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  const target = process.argv[2] || path.join('build', process.platform === 'win32' ? 'Slidesmith.exe' : 'Slidesmith');
+  const target = process.argv[2] || path.join('build', process.platform === 'win32' ? 'QuandrionSlideMaster.exe' : 'QuandrionSlideMaster');
   const result = await signFile(path.resolve(target));
   console.log('');
   if (result.signed) console.log(`Signed ${target} — publisher: ${result.subject}`);

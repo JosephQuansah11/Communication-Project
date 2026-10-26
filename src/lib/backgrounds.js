@@ -208,7 +208,7 @@ export function deckPalette(deck, slide) {
 }
 
 /** A data-URL SVG background built from a palette. */
-export function similarBackgroundDataUrl({ colors = [], width = 1280, height = 720, seed = 'slidesmith' } = {}) {
+export function similarBackgroundDataUrl({ colors = [], width = 1280, height = 720, seed = 'quandrion' } = {}) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
     similarBackgroundSvg({ colors, width, height, seed })
   )}`;
@@ -223,7 +223,7 @@ export function similarBackgroundFor(deck, slide) {
       colors: deckPalette(deck, slide),
       width: Number(deck?.width) || 1280,
       height: Number(deck?.height) || 720,
-      seed: deck?.id || 'slidesmith',
+      seed: deck?.id || 'quandrion',
     }),
     fit: 'cover',
     opacity: 1,

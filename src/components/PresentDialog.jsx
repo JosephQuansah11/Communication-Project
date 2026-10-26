@@ -31,10 +31,10 @@ export default function PresentDialog({ deck, onClose }) {
 
   useEffect(() => {
     const onMessage = (event) => {
-      if (event.data?.type === 'slidesmith:live' && event.data.code) {
+      if (event.data?.type === 'quandrion:live' && event.data.code) {
         setLiveInfo({ code: event.data.code, url: event.data.url });
       }
-      if (event.data?.type === 'slidesmith:presenter-ready') {
+      if (event.data?.type === 'quandrion:presenter-ready') {
         setStarted(true);
       }
     };
@@ -99,7 +99,7 @@ export default function PresentDialog({ deck, onClose }) {
     if (!presenterView) {
       const outputWin = window.open(
         `/present/${deck.id}?output=1&fs=1&live=${live ? '1' : '0'}${showQuery}`,
-        `slidesmith-output-${deck.id}`,
+        `quandrion-output-${deck.id}`,
         `popup=yes,width=${screen.availWidth},height=${screen.availHeight},left=${screen.availLeft},top=${screen.availTop},${chromeOff}`
       );
       if (!outputWin) {
@@ -125,7 +125,7 @@ export default function PresentDialog({ deck, onClose }) {
     const consoleUrl = `/present/${deck.id}?live=${live ? '1' : '0'}&fill=${fillScreen ? '1' : '0'}&fs=0${showQuery}`;
     const consoleWin = window.open(
       consoleUrl,
-      `slidesmith-console-${deck.id}`,
+      `quandrion-console-${deck.id}`,
       `popup=yes,width=${consoleWidth},height=${consoleHeight},left=${primary.availLeft + 12},top=${primary.availTop + 12},${chromeOff}`
     );
     if (!consoleWin) {
@@ -150,7 +150,7 @@ export default function PresentDialog({ deck, onClose }) {
     const outputUrl = `/present/${deck.id}?output=1&fs=${!outputOnPrimary && fullscreen ? '1' : '0'}${showQuery}`;
     const outputWin = window.open(
       outputUrl,
-      `slidesmith-output-${deck.id}`,
+      `quandrion-output-${deck.id}`,
       `popup=yes,width=${outputWidth},height=${outputHeight},left=${outputLeft},top=${outputTop},${chromeOff}`
     );
     if (outputWin) {

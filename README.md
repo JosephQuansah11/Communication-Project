@@ -1,10 +1,10 @@
-# Slidesmith Studio
+# QuandrionSlideMaster
 
 A full presentation workspace built with React, Express and WebSockets. It imports PowerPoint/WPS decks,
 lets every object be edited, runs an Excel-compatible formula engine inside slide tables, crops images into
 shapes, and presents on a chosen display with a live audience that follows over WebSocket.
 
-![Slidesmith Studio](docs/home.png)
+![QuandrionSlideMaster](docs/home.png)
 
 ## Quick start
 
@@ -21,7 +21,7 @@ Data lives in `data/` (decks and uploaded media). On first run a five-slide prod
 
 ## Ship it as a single application (one `.exe`)
 
-<img src="docs/app-icon.png" alt="Slidesmith Studio app icon" width="96" align="right" />
+<img src="docs/app-icon.png" alt="QuandrionSlideMaster app icon" width="96" align="right" />
 
 Build a **single, self-contained executable** that anyone can download and double-click — no Node.js, no
 installer, no `npm install` on their machine:
@@ -31,16 +31,16 @@ npm install
 npm run build:exe
 ```
 
-That produces **`build/Slidesmith.exe`** (about 91 MB, Windows). It bundles the Express server, every
+That produces **`build/QuandrionSlideMaster.exe`** (about 91 MB, Windows). It bundles the Express server, every
 dependency, the compiled React client and the Node runtime into one file, with the app icon and version
 metadata stamped in.
 
 ### Using the packaged app
 
-1. Copy `Slidesmith.exe` anywhere — a folder, a USB stick, a network share.
+1. Copy `QuandrionSlideMaster.exe` anywhere — a folder, a USB stick, a network share.
 2. Double-click it. A console window opens and the app appears in its own browser window.
-3. Your decks live in `SlidesmithData/` next to the executable. If that folder is read-only (for example
-   `Program Files`), the app falls back to `%APPDATA%\Slidesmith Studio`.
+3. Your decks live in `QuandrionSlideMasterData/` next to the executable. If that folder is read-only (for example
+   `Program Files`), the app falls back to `%APPDATA%\QuandrionSlideMaster`.
 4. Close the console window to stop the app.
 
 Command line flags (optional):
@@ -59,16 +59,16 @@ The executable is built with the publisher metadata set to **josephQuansah11** �
 and the version resource all carry it, so *Properties → Details* shows the publisher.
 
 Windows' block dialogs (**Smart App Control**, SmartScreen) do **not** read that metadata, though: they read the
-file's **Authenticode signature**. An unsigned `Slidesmith.exe` is "an app we couldn't find a publisher for" no
+file's **Authenticode signature**. An unsigned `QuandrionSlideMaster.exe` is "an app we couldn't find a publisher for" no
 matter what the version resource says. Signing the file is what puts the publisher on it, and the name Windows then
 shows is the subject of the certificate that signed it.
 
 ```powershell
 npm run cert:new                       # makes build/certs/josephQuansah11.pfx (self-signed, 3 years)
 $env:SLIDESMITH_CERT_PFX="build\certs\josephQuansah11.pfx"
-$env:SLIDESMITH_CERT_PASSWORD="slidesmith"
+$env:SLIDESMITH_CERT_PASSWORD="quandrion"
 npm run build:exe                      # signs as it builds
-npm run sign:exe                       # or sign an existing build/Slidesmith.exe
+npm run sign:exe                       # or sign an existing build/QuandrionSlideMaster.exe
 ```
 
 | Variable | Meaning |
@@ -101,8 +101,13 @@ afterwards and prints the publisher it ended up with.
 
 ### Notes for whoever receives the file
 
-- It ships **unsigned** unless you configured a certificate above, so Windows SmartScreen may warn on first run:
-  *More info* → *Run anyway*; Smart App Control refuses it outright until it is signed.
+- **Closing the window closes the app.** Every open page sends a heartbeat; when the last one stops — you closed
+  the window, the tab crashed, the machine slept — the packaged app shuts its server, its live sockets and itself
+  down, so no invisible process is left holding `QuandrionSlideMaster.exe` open. A window that closes on purpose is
+  noticed in about a second and a half (long enough for a reload to come back), a silent one within a few seconds.
+  `--keep-running` (or `QUANDRION_KEEP_RUNNING=1`) keeps the server up instead, which is what the dev server does.
+- **It is unsigned**, so Windows SmartScreen may warn on first run: *More info* → *Run anyway*; Smart App Control
+  refuses it outright until it is signed.
 - The file is large because it embeds the Node.js runtime — that is what removes the install step.
 - Builds are per platform: `npm run build:exe` produces a Windows `.exe` on Windows, a macOS binary on macOS
   and a Linux binary on Linux (Node's single-executable packaging cannot cross-compile).
@@ -115,7 +120,7 @@ afterwards and prints the publisher it ended up with.
 native PPTX import and a live WebSocket room:
 
 ```bash
-build\Slidesmith.exe --no-open --port=3000    # or: npm run dev
+build\QuandrionSlideMaster.exe --no-open --port=3000    # or: npm run dev
 npm run smoke -- http://localhost:3000
 ```
 
@@ -410,7 +415,7 @@ shape — a fill (or a picture fill), a border, text, rotation and animation all
   system and architecture.
 - **No terminal window beside the app.** Every child process is spawned hidden, and the packaged executable is
   patched to the Windows **GUI subsystem** (`build:exe` prints `subsystem 3 -> 2`), so double-clicking it opens only
-  the app. Its console output is mirrored to `SlidesmithData/data/slidesmith.log` instead.
+  the app. Its console output is mirrored to `QuandrionSlideMasterData/data/quandrion.log` instead.
 
 ### Online videos
 - **Insert ▸ Online video** takes a YouTube or Vimeo link and drops it on the slide at 16:9. Pasting a video link

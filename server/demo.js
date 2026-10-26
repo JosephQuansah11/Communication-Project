@@ -274,7 +274,7 @@ export function createDemoDeck(options = {}) {
 
   const deck = {
     id: 'demo',
-    title: 'Slidesmith Studio — Product tour',
+    title: 'QuandrionSlideMaster — Product tour',
     width: 1280,
     height: 720,
     createdAt: now,

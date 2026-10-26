@@ -158,7 +158,7 @@ export default function LiveAudience({ code: rawCode }) {
         <Icon name="wifi" size={41} />
         <h2>Live session unavailable</h2>
         <p>{error || 'This session has ended or the code is incorrect.'}</p>
-        <a className="primary-btn" href="/">Back to Slidesmith</a>
+        <a className="primary-btn" href="/">Back to QuandrionSlideMaster</a>
       </div>
     );
   }
@@ -169,7 +169,7 @@ export default function LiveAudience({ code: rawCode }) {
         <Icon name="check" size={41} />
         <h2>The presentation has ended</h2>
         <p>Thanks for watching. You can close this window.</p>
-        <a className="primary-btn" href="/">Back to Slidesmith</a>
+        <a className="primary-btn" href="/">Back to QuandrionSlideMaster</a>
       </div>
     );
   }

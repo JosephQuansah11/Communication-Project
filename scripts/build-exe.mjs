@@ -6,7 +6,7 @@
  *   2. turns that file into a Node Single Executable Application blob;
  *   3. copies the Node runtime and injects the blob with postject.
  *
- * Result: build/Slidesmith.exe (Windows) or build/Slidesmith (macOS/Linux).
+ * Result: build/QuandrionSlideMaster.exe (Windows) or build/QuandrionSlideMaster (macOS/Linux).
  * The executable is built for the platform it runs on — SEA cannot cross-compile.
  *
  * Usage: node scripts/build-exe.mjs
@@ -22,10 +22,10 @@ const require = createRequire(import.meta.url);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const buildDir = path.join(root, 'build');
 const generatedClient = path.join(root, 'server', 'generated', 'client-assets.js');
-const bundlePath = path.join(buildDir, 'slidesmith.cjs');
+const bundlePath = path.join(buildDir, 'quandrion.cjs');
 const configPath = path.join(buildDir, 'sea-config.json');
 const blobPath = path.join(buildDir, 'sea-prep.blob');
-const appName = 'Slidesmith';
+const appName = 'QuandrionSlideMaster';
 const exeName = process.platform === 'win32' ? `${appName}.exe` : appName;
 const exePath = path.join(buildDir, exeName);
 const iconPath = path.join(buildDir, 'icon.ico');
@@ -51,7 +51,7 @@ function removePreviousExe(file) {
     if (error.code !== 'EPERM' && error.code !== 'EBUSY' && error.code !== 'EACCES') throw error;
     console.error('');
     console.error(`   ${path.relative(root, file)} is in use — a running copy of the app holds it open.`);
-    console.error('   Close Slidesmith (check the notification area for a running instance) and build again.');
+    console.error('   Close QuandrionSlideMaster (check the notification area for a running instance) and build again.');
     console.error('   Tip: `npm run preview:app` runs the same app from source and never locks the build.');
     process.exit(1);
   }
@@ -122,10 +122,10 @@ if (process.platform === 'win32') {
       'product-version': version,
       'version-string': {
         CompanyName: PUBLISHER,
-        FileDescription: 'Slidesmith Studio - presentation workspace',
+        FileDescription: 'QuandrionSlideMaster - presentation workspace',
         InternalFilename: appName,
         OriginalFilename: exeName,
-        ProductName: 'Slidesmith Studio',
+        ProductName: 'QuandrionSlideMaster',
         LegalCopyright: `MIT licensed - ${PUBLISHER}`,
       },
     });
@@ -210,9 +210,9 @@ console.log('');
 console.log('  ==============================================');
 console.log(`   Packaged app ready: build/${exeName} (${sizeMb} MB)`);
 console.log('  ==============================================');
-console.log('   Double-click it to start Slidesmith Studio.');
+console.log('   Double-click it to start QuandrionSlideMaster.');
 console.log('   The app opens in your browser and stores decks in a');
-console.log('   "SlidesmithData" folder next to the executable (or in your');
+console.log('   "QuandrionSlideMasterData" folder next to the executable (or in your');
 console.log('   user profile when that folder is not writable).');
 console.log('');
 console.log('   Share the file directly — the recipient needs no Node.js.');

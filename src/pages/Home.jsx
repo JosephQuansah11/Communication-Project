@@ -104,7 +104,7 @@ export default function Home({ navigate }) {
       <header className="home-nav">
         <a className="home-brand" href="/">
           <span className="brand-mark"><Icon name="logo" size={26} /></span>
-          <span>Slidesmith <em>Studio</em></span>
+          <span>QuandrionSlideMaster <em>Studio</em></span>
         </a>
         <nav className="home-nav-links">
           <span className="nav-pill"><Icon name="font" size={16} /> System fonts</span>
@@ -297,7 +297,7 @@ export default function Home({ navigate }) {
       <footer className="home-footer">
         <div>
           <span className="brand-mark small"><Icon name="logo" size={18} /></span>
-          <span>Slidesmith Studio</span>
+          <span>QuandrionSlideMaster</span>
         </div>
         <span>PowerPoint import · Excel tables · Multi-display presenting · WebSocket live sync</span>
       </footer>

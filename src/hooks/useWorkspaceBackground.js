@@ -7,7 +7,7 @@ import { WORKSPACE_BACKGROUND_DEFAULT, workspaceBackgroundStyles } from '../lib/
  * WPS lets you skin the window itself, so the same thing is possible here: an
  * image, its fit, opacity and blur, remembered per browser.
  */
-const STORAGE_KEY = 'slidesmith:workspace-background';
+const STORAGE_KEY = 'quandrion:workspace-background';
 
 function read() {
   try {

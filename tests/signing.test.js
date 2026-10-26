@@ -6,7 +6,7 @@ import path from 'node:path';
 import { DEFAULT_TIMESTAMP_URL, PUBLISHER, psQuote, signFile, signingConfig } from '../scripts/sign-exe.mjs';
 
 /** A throwaway file, so the signing paths have something real to work on. */
-const fakeExe = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'slidesmith-sign-')), 'Slidesmith.exe');
+const fakeExe = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'quandrion-sign-')), 'QuandrionSlideMaster.exe');
 fs.writeFileSync(fakeExe, 'not really an executable');
 
 test('the app has a publisher name', () => {
@@ -40,7 +40,7 @@ test('signing picks the method the environment asks for', () => {
 });
 
 test('PowerShell values are quoted so paths cannot break out', () => {
-  assert.equal(psQuote('C:\\build\\Slidesmith.exe'), "'C:\\build\\Slidesmith.exe'");
+  assert.equal(psQuote('C:\\build\\QuandrionSlideMaster.exe'), "'C:\\build\\QuandrionSlideMaster.exe'");
   assert.equal(psQuote("it's here"), "'it''s here'");
 });
 

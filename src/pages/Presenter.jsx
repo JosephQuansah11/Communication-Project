@@ -186,7 +186,7 @@ export default function Presenter({ deckId, navigate }) {
   useEffect(() => {
     let channel = null;
     try {
-      channel = new BroadcastChannel(`slidesmith-show-${deckId}`);
+      channel = new BroadcastChannel(`quandrion-show-${deckId}`);
     } catch {
       channel = null;
     }
@@ -224,7 +224,7 @@ export default function Presenter({ deckId, navigate }) {
     if (isOutput) channel.postMessage({ type: 'hello' });
     return () => {
       if (isOutput) channel.postMessage({ type: 'closed' });
-      // The console closing (Esc, the exit button or the window's ×) takes the
+      // The console closing (Esc, the exit button or the window's ï¿½) takes the
       // audience window with it.
       else channel.postMessage({ type: 'ended' });
       channel.onmessage = null;
@@ -306,7 +306,7 @@ export default function Presenter({ deckId, navigate }) {
   useEffect(() => {
     if (!deck) return undefined;
     try {
-      window.opener?.postMessage({ type: 'slidesmith:presenter-ready' }, window.location.origin);
+      window.opener?.postMessage({ type: 'quandrion:presenter-ready' }, window.location.origin);
     } catch {
       /* ignore */
     }
@@ -380,7 +380,7 @@ export default function Presenter({ deckId, navigate }) {
     if (!deck) return undefined;
     let channel;
     try {
-      channel = new BroadcastChannel(`slidesmith-${deckId}`);
+      channel = new BroadcastChannel(`quandrion-${deckId}`);
     } catch {
       channel = null;
     }
@@ -441,7 +441,7 @@ export default function Presenter({ deckId, navigate }) {
           setSession({ code: message.code, status: 'connected', error: '' });
           try {
             window.opener?.postMessage(
-              { type: 'slidesmith:live', code: message.code, url: liveUrl(message.code) },
+              { type: 'quandrion:live', code: message.code, url: liveUrl(message.code) },
               window.location.origin
             );
           } catch {

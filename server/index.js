@@ -1,6 +1,10 @@
 import express from 'express';
 import multer from 'multer';
 import { WebSocketServer, WebSocket } from 'ws';
+import { createPresence } from './presence.js';
+
+/** Set once the server is listening: closes everything and stops the process. */
+const shutdownRef = { current: null };
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import path from 'node:path';
@@ -15,7 +19,9 @@ import { detectServerPlatform, openCommand, platformLabel } from '../shared/plat
 const __dirname = moduleDir();
 const ROOT = path.resolve(__dirname, '..');
 /** True when running from the packaged single-file executable (Node SEA). */
-const STANDALONE = process.env.SLIDESMITH_STANDALONE === '1';
+const APP_FOLDER = 'QuandrionSlideMaster';
+const PORTABLE_FOLDER = 'QuandrionSlideMasterData';
+const STANDALONE = process.env.SLIDESMITH_STANDALONE === '1' || process.env.QUANDRION_STANDALONE === '1';
 const isProduction = process.env.NODE_ENV === 'production';
 const DATA_DIR = STANDALONE ? path.join(userDataRoot(), 'data') : path.join(ROOT, 'data');
 const DECKS_DIR = path.join(DATA_DIR, 'decks');
@@ -51,10 +57,10 @@ function hasFlag(name) {
 function userAppDataDir() {
   const home = os.homedir();
   if (process.platform === 'win32') {
-    return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Slidesmith Studio');
+    return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), APP_FOLDER);
   }
-  if (process.platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'Slidesmith Studio');
-  return path.join(process.env.XDG_DATA_HOME || path.join(home, '.local', 'share'), 'slidesmith-studio');
+  if (process.platform === 'darwin') return path.join(home, 'Library', 'Application Support', APP_FOLDER);
+  return path.join(process.env.XDG_DATA_HOME || path.join(home, '.local', 'share'), 'quandrion-slide-master');
 }
 
 /**
@@ -63,10 +69,15 @@ function userAppDataDir() {
  * back to the per-user application data folder otherwise.
  */
 function userDataRoot() {
-  const override = process.env.SLIDESMITH_DATA_DIR;
+  const override = process.env.SLIDESMITH_DATA_DIR || process.env.QUANDRION_DATA_DIR;
   if (override) return override;
   const candidates = [];
-  if (STANDALONE) candidates.push(path.join(path.dirname(process.execPath), 'SlidesmithData'));
+  if (STANDALONE) {
+    // The new folder first, then the one earlier builds used, so decks made
+    // before the rename keep working.
+    candidates.push(path.join(path.dirname(process.execPath), PORTABLE_FOLDER));
+    candidates.push(path.join(path.dirname(process.execPath), 'SlidesmithData'));
+  }
   candidates.push(userAppDataDir());
   for (const candidate of candidates) {
     try {
@@ -79,7 +90,7 @@ function userDataRoot() {
       /* not writable — try the next location */
     }
   }
-  return path.join(os.tmpdir(), 'slidesmith-data');
+  return path.join(os.tmpdir(), 'quandrion-data');
 }
 
 /** Create the storage folders. Called from `start()` so the bundle stays CommonJS-safe. */
@@ -194,11 +205,11 @@ let loggingStarted = false;
 async function convertLegacy(buffer, originalName) {
   if (!LO_BIN) {
     throw new ImportError(
-      'Legacy binary PowerPoint/WPS files (.ppt, .dps, .dpt, .pt) need a converter. Save the file as .pptx in PowerPoint or WPS, or install LibreOffice on the server so Slidesmith can convert it automatically.',
+      'Legacy binary PowerPoint/WPS files (.ppt, .dps, .dpt, .pt) need a converter. Save the file as .pptx in PowerPoint or WPS, or install LibreOffice on the server so QuandrionSlideMaster can convert it automatically.',
       415
     );
   }
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'slidesmith-'));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'quandrion-'));
   const ext = path.extname(originalName) || '.ppt';
   const input = path.join(tempDir, `input${ext}`);
   await fs.writeFile(input, buffer);
@@ -218,8 +229,29 @@ async function convertLegacy(buffer, originalName) {
   return converted;
 }
 
+
+/*
+ * Window presence: every open page says hello, and says goodbye when it closes.
+ * The packaged app uses this to shut itself down with its last window instead of
+ * lingering in the background.
+ */
+const presence = createPresence({
+  onIdle: () => {
+    if (!shutdownRef.current) return;
+    console.log('   The last window closed � stopping QuandrionSlideMaster.');
+    shutdownRef.current();
+  },
+});
+
+app.post('/api/beat', (req, res) => {
+  const { id, leaving } = req.body || {};
+  if (leaving) presence.drop(id);
+  else presence.beat(id);
+  res.json({ ok: true, pages: presence.count() });
+});
+
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, service: 'slidesmith-studio', converter: Boolean(LO_BIN), time: new Date().toISOString() });
+  res.json({ ok: true, service: 'quandrion-slide-master', converter: Boolean(LO_BIN), time: new Date().toISOString() });
 });
 
 app.get('/api/decks', async (req, res, next) => {
@@ -802,13 +834,13 @@ app.use((error, req, res, next) => {
 
 /**
  * Keep a log file for the packaged app, whose console window is hidden: every
- * console line is appended to `SlidesmithData/slidesmith.log` (trimmed when it
+ * console line is appended to `QuandrionSlideMasterData/quandrion.log` (trimmed when it
  * grows), so a user can still send something useful when something goes wrong.
  */
 function startFileLogging() {
   if (loggingStarted) return;
   loggingStarted = true;
-  const file = path.join(DATA_DIR, 'slidesmith.log');
+  const file = path.join(DATA_DIR, 'quandrion.log');
   const write = (level, args) => {
     try {
       const line = `${new Date().toISOString()} ${level} ${args
@@ -872,7 +904,7 @@ async function start() {
   const lines = [
     '',
     '  ==============================================',
-    '    Slidesmith Studio',
+    '    QuandrionSlideMaster',
     '  ==============================================',
     `   System:                ${platformLabel(platform)} (${process.platform} ${process.arch})`,
     `   Open in your browser:  ${url}`,
@@ -890,15 +922,24 @@ async function start() {
   if (STANDALONE) openBrowser(url);
 
   const shutdown = () => {
+    presence.stop();
+    for (const client of wss.clients) client.close();
+    wss.close();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 1500).unref();
   };
+  shutdownRef.current = shutdown;
+
+  // The app lives as long as one of its windows does. `--keep-running` (or
+  // QUANDRION_KEEP_RUNNING=1) keeps the server up for a script or a test.
+  const keepRunning = hasFlag('keep-running') || process.env.QUANDRION_KEEP_RUNNING === '1' || process.env.SLIDESMITH_KEEP_RUNNING === '1';
+  if (STANDALONE && keepRunning) console.log('   Running with --keep-running: the app stays up when its window closes.');
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 }
 
 start().catch((error) => {
-  console.error('Failed to start Slidesmith Studio', error);
+  console.error('Failed to start QuandrionSlideMaster', error);
   process.exit(1);
 });
 

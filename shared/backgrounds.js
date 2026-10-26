@@ -53,7 +53,7 @@ export function slidePalette(slide = {}) {
 
 function seededRandom(seed) {
   let state = 2166136261;
-  for (const character of String(seed ?? 'slidesmith')) {
+  for (const character of String(seed ?? 'quandrion')) {
     state ^= character.charCodeAt(0);
     state = Math.imul(state, 16777619);
   }
@@ -78,7 +78,7 @@ function mix(hex, target, amount) {
  * colour with the accent colours blurred across it, so an imported deck keeps a
  * look that matches its theme instead of a bare white slide.
  */
-export function similarBackgroundSvg({ colors = [], width = 1280, height = 720, seed = 'slidesmith', intensity = 1 } = {}) {
+export function similarBackgroundSvg({ colors = [], width = 1280, height = 720, seed = 'quandrion', intensity = 1 } = {}) {
   const palette = (colors || []).map((value) => String(value).toLowerCase()).filter((value) => HEX.test(value));
   const base = palette[0] || '#0f172a';
   const accents = palette.slice(1).length ? palette.slice(1) : ['#6366f1', '#22d3ee'];
