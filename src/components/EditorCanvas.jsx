@@ -611,12 +611,38 @@ export default function EditorCanvas({
     capturePointer(event.currentTarget, event.pointerId);
   };
 
+  /**
+   * Where a dot sits inside the element's box, in slide pixels.
+   *
+   * Rings are stored in the 0..100 box, so this is the conversion both the grab
+   * offset and the drag maths need.
+   */
+  const ringPointPx = (element, point) => ({
+    x: (Number(point?.x) / LOCAL_BOX) * (element.w || 1),
+    y: (Number(point?.y) / LOCAL_BOX) * (element.h || 1),
+  });
+
   const startNodeDrag = (event, element, ringIndex, pointIndex, handle = null) => {
     event.stopPropagation();
     event.preventDefault();
     if (!element) return;
     onBegin();
-    dragRef.current = { mode: 'node', element, ringIndex, pointIndex, handle, base: ensureRings(element) };
+    const base = ensureRings(element);
+    // Where the pointer landed relative to the dot it grabbed: keeping this offset
+    // means the dot stays exactly under the cursor instead of snapping to it, which
+    // is what made a 6px handle feel like it was a few pixels out of reach.
+    const local = localFromEvent(event, element);
+    const point = handle ? base[ringIndex]?.points?.[pointIndex]?.[handle] : base[ringIndex]?.points?.[pointIndex];
+    const at = ringPointPx(element, point);
+    dragRef.current = {
+      mode: 'node',
+      element,
+      ringIndex,
+      pointIndex,
+      handle,
+      base,
+      grab: { x: at.x - local.x, y: at.y - local.y },
+    };
     setDragging(true);
     capturePointer(event.currentTarget, event.pointerId);
   };
@@ -636,7 +662,20 @@ export default function EditorCanvas({
     event.preventDefault();
     if (!element) return;
     onBegin();
-    dragRef.current = { mode: 'bend', element, ringIndex, segmentIndex, base: ensureRings(element) };
+    const base = ensureRings(element);
+    // Same idea as a dot drag: remember where along the edge the pointer grabbed,
+    // so the curve follows the cursor without jumping.
+    const local = localFromEvent(event, element);
+    const mid = base[ringIndex] ? ringSegmentMidpoint(base[ringIndex], segmentIndex) : null;
+    const at = ringPointPx(element, mid);
+    dragRef.current = {
+      mode: 'bend',
+      element,
+      ringIndex,
+      segmentIndex,
+      base,
+      grab: { x: at.x - local.x, y: at.y - local.y },
+    };
     setDragging(true);
     capturePointer(event.currentTarget, event.pointerId);
   };
@@ -718,7 +757,7 @@ export default function EditorCanvas({
     if (drag.mode === 'node') {
       // Every move recomputes from the outline the drag started with, so it never drifts.
       const local = localFromEvent(input, drag.element);
-      onPatchPath?.(drag.element.id, movePathPoint(drag.element, drag.ringIndex, drag.pointIndex, local, drag.handle, drag.base), false);
+      onPatchPath?.(drag.element.id, movePathPoint(drag.element, drag.ringIndex, drag.pointIndex, { x: local.x + (drag.grab?.x || 0), y: local.y + (drag.grab?.y || 0) }, drag.handle, drag.base), false);
       return;
     }
     if (drag.mode === 'bend') {
@@ -731,8 +770,8 @@ export default function EditorCanvas({
       }
       const local = localFromEvent(input, drag.element);
       const target = {
-        x: (local.x / (drag.element.w || 1)) * LOCAL_BOX,
-        y: (local.y / (drag.element.h || 1)) * LOCAL_BOX,
+        x: ((local.x + (drag.grab?.x || 0)) / (drag.element.w || 1)) * LOCAL_BOX,
+        y: ((local.y + (drag.grab?.y || 0)) / (drag.element.h || 1)) * LOCAL_BOX,
       };
       const rings = cloneRings(drag.base || []);
       if (rings[drag.ringIndex]) {
@@ -833,8 +872,8 @@ export default function EditorCanvas({
       const last = lastPointer.current || drag.origin;
       const local = localFromEvent(last, drag.element);
       const target = {
-        x: (local.x / (drag.element.w || 1)) * LOCAL_BOX,
-        y: (local.y / (drag.element.h || 1)) * LOCAL_BOX,
+        x: ((local.x + (drag.grab?.x || 0)) / (drag.element.w || 1)) * LOCAL_BOX,
+        y: ((local.y + (drag.grab?.y || 0)) / (drag.element.h || 1)) * LOCAL_BOX,
       };
       const nearest = nearestOnRings(drag.base || [], target, 30);
       if (nearest) {

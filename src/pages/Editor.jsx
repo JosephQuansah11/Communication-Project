@@ -1681,6 +1681,17 @@ export default function Editor({ deckId, navigate }) {
     setPointEditId(element.id);
   }, [selectedIds, slideElements]);
 
+  /**
+   * The dots only ever belong to the object that is selected right now.
+   *
+   * Anything that changes the selection — clicking another object, a marquee, a
+   * group, a slide switch — takes the dots with it, so the handles can never end up
+   * sitting on a different object from the one the selection box is around.
+   */
+  useEffect(() => {
+    if (pointEditId && pointEditId !== selectedId) setPointEditId(null);
+  }, [pointEditId, selectedId]);
+
   /** Leaving the select tool always locks the shape. */
   useEffect(() => {
     if (tool !== 'select' && pointEditId) lockPointEdit();
