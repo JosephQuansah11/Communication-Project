@@ -3806,6 +3806,38 @@ input[type="range"]::-webkit-slider-thumb {
 .context-item {
   display: flex;
   align-items: center;
+
+/* ----------------------------------------------------------------------- *
+ * Vector Edit handles
+ *
+ * Light, hollow handles with an orange rim: they sit *on* the object's edge
+ * without covering the picture underneath, the way a selection box does. These
+ * rules come last on purpose — a stylesheet beats an SVG fill attribute, so the
+ * colour has to be settled here as well as on the shapes themselves.
+ * ----------------------------------------------------------------------- */
+
+.node-editor .node-outline {
+  stroke: #f97316;
+  stroke-dasharray: none;
+}
+
+.node-editor .node-anchor {
+  fill: #ffffff;
+  stroke: #f97316;
+  stroke-width: 1.6;
+}
+
+.node-editor .node-bend {
+  fill: #ffffff;
+  stroke: #fb923c;
+  stroke-width: 1.6;
+}
+
+.node-editor .node-bend.curved {
+  fill: #ea580c;
+  stroke: #ea580c;
+}
+
   gap: 10px;
   width: 100%;
   padding: 8px 10px;

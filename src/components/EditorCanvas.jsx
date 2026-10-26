@@ -106,7 +106,6 @@ function ShapeNodeEditor({ element, scale, onPointDrag, onInsert, onRemove, onBe
         stroke="#f97316"
         strokeOpacity={0.9}
         strokeWidth={1}
-        strokeDasharray="4 3"
         vectorEffect="non-scaling-stroke"
       />
       <path
@@ -161,9 +160,10 @@ function ShapeNodeEditor({ element, scale, onPointDrag, onInsert, onRemove, onBe
               )}
               <rect
                 className="node-anchor"
-                fill="#f97316"
-                stroke="#ffffff"
-                strokeWidth={1.2}
+                style={{ fill: '#ffffff', stroke: '#f97316' }}
+                fill="#ffffff"
+                stroke="#f97316"
+                strokeWidth={1.6}
                 x={at.x - anchor / 2}
                 y={at.y - anchor / 2}
                 width={anchor}
@@ -195,9 +195,10 @@ function ShapeNodeEditor({ element, scale, onPointDrag, onInsert, onRemove, onBe
             <rect
               key={`bend-${ringIndex}-${segmentIndex}`}
               className={`node-bend${curved ? ' curved' : ''}`}
-              fill={curved ? '#ea580c' : '#fdba74'}
-              stroke="#ffffff"
-              strokeWidth={1.2}
+              style={{ fill: curved ? '#ea580c' : '#ffffff', stroke: curved ? '#ea580c' : '#fb923c' }}
+              fill={curved ? '#ea580c' : '#ffffff'}
+              stroke="#fb923c"
+              strokeWidth={1.6}
               x={at.x - bend / 2}
               y={at.y - bend / 2}
               width={bend}
