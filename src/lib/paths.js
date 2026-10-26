@@ -153,6 +153,52 @@ export function movePathPoint(element, ringIndex, pointIndex, local, handle = nu
   return next;
 }
 
+/** True when every point of every ring — and its curve handles — is inside 0..100. */
+export function ringsInBox(rings = [], tolerance = 2) {
+  const outside = (point) =>
+    Boolean(point) &&
+    (point.x < -tolerance || point.x > LOCAL_BOX + tolerance || point.y < -tolerance || point.y > LOCAL_BOX + tolerance);
+  return !rings.some((ring) =>
+    (ring.points || []).some((point) => outside(point) || outside(point.in) || outside(point.out))
+  );
+}
+
+/**
+ * The fields that put an element's outline back into its own box, or null when it is
+ * already there.
+ *
+ * Some imported paths carry coordinates far outside the 0..100 box they are supposed
+ * to live in. The shape still draws (a curve handle far away barely changes the line)
+ * but its editing dots end up scattered across the slide, nowhere near the object.
+ * Re-normalising from the outline's own bounds fixes the dots and makes the element's
+ * box hug the shape, so the selection box stops hanging away from it too.
+ */
+export function normalizePathShape(element) {
+  if (element?.shape !== 'path') return null;
+  const rings = element.path?.rings || [];
+  if (!rings.length || ringsInBox(rings)) return null;
+  const fixed = ringsToPathShape(shapeRings(element), {
+    fill: element.fill,
+    fillImage: element.fillImage,
+    stroke: element.stroke,
+    strokeWidth: element.strokeWidth,
+    name: element.name,
+  });
+  // A curve handle can sit even further out than its anchor. Mapping it by the same
+  // transform would leave it out of the box again, so it is clamped: a handle beyond
+  // the box has no meaning for a shape drawn inside it.
+  const clamp = (value) => Math.max(0, Math.min(LOCAL_BOX, Math.round(value * 1000) / 1000));
+  fixed.path.rings = fixed.path.rings.map((ring) => ({
+    ...ring,
+    points: ring.points.map((point) => ({
+      ...point,
+      ...(point.in ? { in: { x: clamp(point.in.x), y: clamp(point.in.y) } } : {}),
+      ...(point.out ? { out: { x: clamp(point.out.x), y: clamp(point.out.y) } } : {}),
+    })),
+  }));
+  return fixed;
+}
+
 /** Drop an anchor out of a ring, keeping at least two points. */
 export function removePathPoint(element, ringIndex, pointIndex, rings = null) {
   const next = cloneRings(rings || element.path?.rings || []);

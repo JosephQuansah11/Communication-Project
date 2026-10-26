@@ -66,7 +66,7 @@ import {
 import { animationStepCount, normalizeAnimations } from '../../shared/animations.js';
 import { isOnlineVideo } from '../../shared/video.js';
 import { pastedImageFile, planPaste, readClipboard, writeClipboardText } from '../lib/clipboard.js';
-import { SHAPE_OP_LABELS, booleanMany, rectRings, ringsToPathShape, shapeRings } from '../lib/paths.js';
+import { SHAPE_OP_LABELS, booleanMany, normalizePathShape, rectRings, ringsToPathShape, shapeRings } from '../lib/paths.js';
 import {
   deckMatches as findDeckMatches,
   makeMatcher,
@@ -1764,6 +1764,11 @@ export default function Editor({ deckId, navigate }) {
   /** Open Vector Edit on an object: dots on screen, resize handles off. */
   const enterPointEdit = (id) => {
     if (!id) return;
+    // An outline that lives outside its own box (some imported paths do) would put
+    // the dots nowhere near the object, so put it back in its box first.
+    const target = slideElements.find((item) => item.id === id);
+    const fixed = normalizePathShape(target);
+    if (fixed) patchElement(id, fixed, false);
     pointEditRef.current = { auto: id, locked: null };
     setPointEditId(id);
   };
