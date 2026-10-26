@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Stage from '../components/Stage.jsx';
 import SlideView from '../components/SlideView.jsx';
+import SlideTransition from '../components/SlideTransition.jsx';
 import Icon from '../components/Icon.jsx';
 import MediaLightbox from '../components/MediaLightbox.jsx';
 import TableEditor from '../components/TableEditor.jsx';
@@ -13,6 +14,7 @@ import AnnotationLayer, {
 } from '../components/AnnotationLayer.jsx';
 import { normalizeDeck } from '../lib/elements.js';
 import { createThrottle } from '../lib/throttle.js';
+import { useSlideTransition } from '../hooks/useSlideTransition.js';
 import { animationStepCount, animationsForStep } from '../../shared/animations.js';
 import { fetchDeck, liveUrl, saveDeck, wsUrl } from '../lib/api.js';
 
@@ -121,6 +123,13 @@ export default function Presenter({ deckId, navigate }) {
   const tableTarget = tables.find((element) => element.id === tableId) || null;
   const slideAnimations = slide?.animations || [];
   const stepCount = animationStepCount(slideAnimations);
+  /**
+   * The transition to play, and the slide to keep behind it while it runs. Both the
+   * console and the audience output window run this off the same slide index, so
+   * they stay in step without anything extra being sent over the wire.
+   */
+  const transitionRun = useSlideTransition(deck, index);
+  const heldSlide = transitionRun ? deck?.slides?.[transitionRun.from] || null : null;
 
   /**
    * The running order of the show: every slide, or the custom subset chosen in
@@ -883,21 +892,35 @@ export default function Presenter({ deckId, navigate }) {
             </button>
           </div>
         ) : (
-          <Stage
-            deck={deck}
-            slide={slide}
-            mode={fillMode ? 'cover' : 'contain'}
-            onMediaExpand={setLightbox}
-            onTableDoubleClick={(element) => setTableId(element.id)}
-            animStep={step}
-            overlay={
-              <AnnotationLayer
-                strokes={liveStroke ? [...slideStrokes, liveStroke] : slideStrokes}
-                laser={laser}
-                className="present-annotations"
-              />
+          <SlideTransition
+            run={transitionRun}
+            hold={
+              heldSlide ? (
+                <Stage
+                  deck={deck}
+                  slide={heldSlide}
+                  mode={fillMode ? 'cover' : 'contain'}
+                  animStep={animationStepCount(heldSlide.animations)}
+                />
+              ) : null
             }
-          />
+          >
+            <Stage
+              deck={deck}
+              slide={slide}
+              mode={fillMode ? 'cover' : 'contain'}
+              onMediaExpand={setLightbox}
+              onTableDoubleClick={(element) => setTableId(element.id)}
+              animStep={step}
+              overlay={
+                <AnnotationLayer
+                  strokes={liveStroke ? [...slideStrokes, liveStroke] : slideStrokes}
+                  laser={laser}
+                  className="present-annotations"
+                />
+              }
+            />
+          </SlideTransition>
         )}
         <div className="reaction-layer" aria-live="polite">
           {reactions.map((reaction) => (

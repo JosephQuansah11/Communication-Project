@@ -166,6 +166,7 @@ one after another:
 npm test              # unit tests, including the panel sizes and the install route
 npm run e2e:panels    # hiding and dragging the side panels, in a desktop-sized window
 npm run e2e:mobile    # the phone layout: sheets, pinch zoom, the installable app files
+node e2e-transitions.mjs      # the transitions and object effects, played in a show
 node e2e-editor-actions.mjs   # the editor's own actions, read back from the server
 node e2e-find-replace.mjs     # find & replace across the deck
 node e2e-controls-audit.mjs   # clicks every ribbon control and reports any error
@@ -313,6 +314,11 @@ The inspector shows a **system** badge and the editor footer shows the active fo
   wedge, flash, boomerang, appear, motion paths, and the emphasis set (pulse, grow, shrink, spin, color pulse,
   darken, lighten, transparency, underline, bold, italic, blink). Effects share a handful of parameterised
   keyframes, so an unknown preset degrades to a fade instead of being dropped.
+- **Extra effects on top of the imported set:** **Pop** (snaps into view with an overshoot), **Water drip**
+  (falls in, lands with a squash, settles), **Wave** (leans and swings like a hand wave) and **Water wave**
+  (rides a swell, a slow bob with a soft squash). **Bounce** also works as an *emphasis*, so an object can bounce
+  where it stands as well as bounce in from off-slide. The waving pair plays twice and, like every emphasis, hands
+  the object back exactly as it found it.
 - Motion paths keep their real points and move the element along the net displacement, scaled to the slide size.
 - The live audience follows the step, not just the slide, so everyone sees each item appear together.
 - **Authoring:** select any object → *Animation* in the inspector. Add an Entrance / Emphasis / Exit effect,
@@ -322,6 +328,15 @@ The inspector shows a **system** badge and the editor footer shows the active fo
   themselves as soon as the slide appears — no extra click — and only the click steps wait for the presenter.
 
 ### Presenting
+- **Slide transitions play for real.** Each slide carries one in `transition` (*Transitions ▸ Effect*, or the
+  inspector's *Slide options*), and it runs as the slide arrives — in the presenter window and in both audience
+  outputs, which drive it off the same slide index so they never drift apart. The catalog
+  (`shared/transitions.js`) holds **None**, **Fade**, **Slide** (pushes the old slide out), **Cover** (slides in
+  over it), **Open door** (opens out from the centre line), **Slice** (arrives in four bands, one after another),
+  **Burn away** (the old slide burns off the bottom up under a sweeping ember band) and **Sparkle** (the slide
+  lands behind a burst of points). Each entry's duration is handed to CSS as `--transition-ms`, so the animation
+  and the catalog can never disagree, and *Apply to all* puts the chosen one on every slide. Imported decks arrive
+  on **Fade** — the importer does not read `<p:transition>` yet.
 - **Set Up Show** in the present dialog: pick the display, turn **presenter view** on or off, and build a
   **custom show** (tick the slides to play — the deck itself is never changed).
   - **Presenter view on** (default): the console (notes, timer, annotations, navigator, live panel) opens on your

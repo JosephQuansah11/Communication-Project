@@ -12,6 +12,7 @@ import {
   normalizeAnimation,
 } from '../../shared/animations.js';
 import { describeAnimation } from '../lib/animations.js';
+import { TRANSITIONS, transitionFor } from '../../shared/transitions.js';
 import { isOnlineVideo, onlineVideoLabel } from '../../shared/video.js';
 
 const HIGHLIGHT_SWATCHES = ['#fef08a', '#bbf7d0', '#bfdbfe', '#fecdd3', '#fed7aa', '#e9d5ff', '#f1f5f9'];
@@ -720,10 +721,11 @@ export default function Inspector({
           <div className="field">
             <label>Transition</label>
             <select className="text-input" value={slide.transition || 'fade'} onChange={(event) => onPatchSlide({ transition: event.target.value })}>
-              <option value="fade">Fade</option>
-              <option value="slide">Slide</option>
-              <option value="none">None</option>
+              {TRANSITIONS.map((transition) => (
+                <option key={transition.id} value={transition.id}>{transition.label}</option>
+              ))}
             </select>
+            <small className="field-hint">{transitionFor(slide.transition).hint}</small>
           </div>
           <div className="field">
             <label>Speaker notes</label>

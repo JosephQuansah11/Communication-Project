@@ -51,7 +51,9 @@ export const EFFECT_CATALOG = [
   { id: 'wheel', label: 'Wheel', kinds: ['entrance', 'exit'] },
   { id: 'spiral', label: 'Spiral', kinds: ['entrance', 'exit'] },
   { id: 'swivel', label: 'Swivel', kinds: ['entrance', 'exit'], directions: ['horizontal', 'vertical'] },
-  { id: 'bounce', label: 'Bounce', kinds: ['entrance', 'exit'] },
+  { id: 'bounce', label: 'Bounce', kinds: ['entrance', 'exit', 'emphasis'] },
+  { id: 'pop', label: 'Pop', kinds: ['entrance', 'exit'] },
+  { id: 'waterDrip', label: 'Water drip', kinds: ['entrance', 'exit'] },
   { id: 'bars', label: 'Random bars', kinds: ['entrance', 'exit'], directions: ['horizontal', 'vertical'] },
   { id: 'strips', label: 'Strips', kinds: ['entrance', 'exit'], directions: ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'] },
   { id: 'diamond', label: 'Diamond', kinds: ['entrance', 'exit'] },
@@ -71,6 +73,8 @@ export const EFFECT_CATALOG = [
   { id: 'bold', label: 'Bold', kinds: ['emphasis'] },
   { id: 'italic', label: 'Italic', kinds: ['emphasis'] },
   { id: 'blink', label: 'Blink', kinds: ['emphasis'] },
+  { id: 'wave', label: 'Wave', kinds: ['emphasis'] },
+  { id: 'waterWave', label: 'Water wave', kinds: ['emphasis'] },
   { id: 'path', label: 'Motion path', kinds: ['path'] },
 ];
 

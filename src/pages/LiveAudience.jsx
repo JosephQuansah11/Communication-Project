@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import Stage from '../components/Stage.jsx';
+import SlideTransition from '../components/SlideTransition.jsx';
 import Icon from '../components/Icon.jsx';
 import MediaLightbox from '../components/MediaLightbox.jsx';
 import AnnotationLayer from '../components/AnnotationLayer.jsx';
 import { normalizeDeck } from '../lib/elements.js';
+import { useSlideTransition } from '../hooks/useSlideTransition.js';
 import { wsUrl } from '../lib/api.js';
 
 const EMOJIS = ['👏', '🎉', '❤️', '😮', '👍'];
@@ -188,19 +190,27 @@ export default function LiveAudience({ code: rawCode }) {
   }
 
   const slide = deck.slides[Math.min(index, deck.slides.length - 1)];
+  /** The audience sees the same transition the console plays, off the same index. */
+  const transitionRun = useSlideTransition(deck, Math.min(index, deck.slides.length - 1));
+  const heldSlide = transitionRun ? deck.slides[transitionRun.from] || null : null;
 
   return (
     <div className={`audience ${chrome ? 'chrome-on' : 'chrome-off'}`} onMouseMove={flashChrome}>
       <div className="audience-stage" onClick={() => flashChrome()}>
         {blank === 'none' ? (
-          <Stage
-            deck={deck}
-            slide={slide}
-            mode="contain"
-            onMediaExpand={setLightbox}
-            animStep={step}
-            overlay={<AnnotationLayer strokes={annotations[index] || []} className="present-annotations" />}
-          />
+          <SlideTransition
+            run={transitionRun}
+            hold={heldSlide ? <Stage deck={deck} slide={heldSlide} mode="contain" animStep={null} /> : null}
+          >
+            <Stage
+              deck={deck}
+              slide={slide}
+              mode="contain"
+              onMediaExpand={setLightbox}
+              animStep={step}
+              overlay={<AnnotationLayer strokes={annotations[index] || []} className="present-annotations" />}
+            />
+          </SlideTransition>
         ) : (
           <div className={`blackout-screen ${blank}`} />
         )}

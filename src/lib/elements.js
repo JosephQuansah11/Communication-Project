@@ -1,5 +1,6 @@
 import { htmlToPlainText, sanitizeHtml } from './richtext.js';
 import { normalizeAnimations } from '../../shared/animations.js';
+import { normalizeTransition } from '../../shared/transitions.js';
 import { normalizePictureFill } from './backgrounds.js';
 import { onlineVideoLabel, parseOnlineVideo } from '../../shared/video.js';
 import { ringsToPathShape } from './paths.js';
@@ -250,7 +251,7 @@ export function normalizeDeck(deck) {
     id: slide.id || uid('slide'),
     background: { ...BACKGROUND_DEFAULT, ...(slide.background || {}) },
     notes: slide.notes || '',
-    transition: slide.transition || 'fade',
+    transition: normalizeTransition(slide.transition),
     animations: normalizeAnimations(slide.animations),
     elements: (slide.elements || []).map((element, index) => normalizeElement(element, index)),
   }));

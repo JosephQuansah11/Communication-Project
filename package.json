@@ -15,6 +15,7 @@
     "icons": "node scripts/make-pwa-icons.mjs",
     "e2e:mobile": "node e2e-mobile.mjs",
     "e2e:panels": "node e2e-panels.mjs",
+    "e2e:transitions": "node e2e-transitions.mjs",
     "preview:app": "npm run build:client && node scripts/embed-client.mjs && node server/standalone.js --no-open",
     "start": "node scripts/start-server.mjs",
     "smoke": "node scripts/smoke-test.mjs",

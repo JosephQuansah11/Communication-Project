@@ -42,6 +42,7 @@ import { BACKGROUND_PRESETS, gradientCss, similarBackgroundFor } from '../lib/ba
 import { SLIDE_LAYOUTS, applySlideLayout } from '../lib/layouts.js';
 import { KEYBOARD_SHORTCUTS } from '../lib/ribbon.js';
 import { DEFAULT_PANEL_SIZES, loadPanelSizes, panelWidthStyle, savePanelSizes } from '../lib/panels.js';
+import { TRANSITIONS, transitionFor, transitionLabel } from '../../shared/transitions.js';
 import { detectClientPlatform, modifierKey, platformLabel, shortcutLabel } from '../../shared/platform.js';
 import {
   applyWholeHtmlStyle,
@@ -1793,7 +1794,7 @@ export default function Editor({ deckId, navigate }) {
   const applyTransitionToAll = () => {
     const transition = slide?.transition || 'fade';
     apply((current) => ({ ...current, slides: current.slides.map((item) => ({ ...item, transition })) }));
-    setToast({ type: 'success', message: `Transition “${transition}” applied to every slide.` });
+    setToast({ type: 'success', message: `Transition “${transitionLabel(transition)}” applied to every slide.` });
   };
 
   /**
@@ -2484,12 +2485,12 @@ export default function Editor({ deckId, navigate }) {
         );
       case 'transition':
         return (
-          <label className="ribbon-field" title="How this slide enters">
+          <label className="ribbon-field" title={transitionFor(slide?.transition).hint}>
             <Icon name="play" size={18} />
             <select value={slide?.transition || 'fade'} onChange={(event) => patchSlide({ transition: event.target.value })}>
-              <option value="fade">Fade</option>
-              <option value="slide">Slide</option>
-              <option value="none">None</option>
+              {TRANSITIONS.map((transition) => (
+                <option key={transition.id} value={transition.id}>{transition.label}</option>
+              ))}
             </select>
           </label>
         );

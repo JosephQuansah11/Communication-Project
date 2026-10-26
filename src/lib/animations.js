@@ -52,6 +52,10 @@ const SHARED_KEYFRAMES = {
   crawl: 'anim-slide',
   boomerang: 'anim-slide',
   bounce: 'anim-bounce',
+  pop: 'anim-pop',
+  waterDrip: 'anim-water-drip',
+  wave: 'anim-wave',
+  waterWave: 'anim-water-wave',
   wipe: 'anim-clip',
   box: 'anim-clip',
   diamond: 'anim-clip',
@@ -87,12 +91,20 @@ const SHARED_KEYFRAMES = {
 
 /** Keyframes are shared; exits read the same motion backwards. */
 export function keyframeFor(animation) {
+  // Bounce is an entrance for an object arriving and an emphasis for one bouncing
+  // where it stands, so it is the one effect with two sets of keyframes.
+  if (animation.effect === 'bounce' && animation.kind === 'emphasis') return 'anim-bounce-in-place';
   const base = SHARED_KEYFRAMES[animation.effect] || 'anim-fade';
   return animation.kind === 'exit' ? `${base}-out` : base;
 }
 
 function timingFunction(animation) {
   if (animation.effect === 'bounce') return 'cubic-bezier(0.22, 1.2, 0.36, 1)';
+  // Pop overshoots on the way in, which is the whole point of it.
+  if (animation.effect === 'pop') return 'cubic-bezier(0.34, 1.56, 0.64, 1)';
+  // A drip falls under gravity and lands soft.
+  if (animation.effect === 'waterDrip') return animation.kind === 'exit' ? 'ease-in' : 'cubic-bezier(0.45, 0, 0.55, 1)';
+  if (animation.effect === 'wave' || animation.effect === 'waterWave') return 'ease-in-out';
   if (animation.effect === 'appear' || animation.effect === 'flash') return 'steps(1, end)';
   if (animation.kind === 'emphasis') return 'ease-in-out';
   return 'cubic-bezier(0.22, 0.61, 0.36, 1)';
@@ -102,6 +114,12 @@ function fillMode(animation) {
   // Entrances and exits must hold their first frame while waiting and their last
   // frame once done; emphasis effects always return to the natural state.
   return animation.kind === 'emphasis' ? 'none' : 'both';
+}
+
+/** The waving effects are a movement, not a change of state: they read better twice. */
+function iterationCount(animation) {
+  if (animation.kind === 'emphasis' && (animation.effect === 'wave' || animation.effect === 'waterWave')) return 2;
+  return 1;
 }
 
 /** Custom properties the shared keyframes read. */
@@ -189,7 +207,7 @@ export function animationStyle(resolved, size) {
     animationDelay: `${animation.delay || 0}ms`,
     animationTimingFunction: timingFunction(animation),
     animationFillMode: fillMode(animation),
-    animationIterationCount: 1,
+    animationIterationCount: iterationCount(animation),
     animationPlayState: played ? 'running' : 'paused',
     ...animationVariables(animation, size),
   };

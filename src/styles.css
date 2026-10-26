@@ -2734,6 +2734,64 @@ input[type="range"]::-webkit-slider-thumb {
   to { opacity: 0; translate: var(--anim-tx, 0%) var(--anim-ty, -45%); }
 }
 
+/* Bounce as an emphasis: the object hops and squashes where it stands. */
+@keyframes anim-bounce-in-place {
+  0% { translate: 0 0; scale: 1 1; }
+  12% { translate: 0 0; scale: 1.09 0.85; }
+  32% { translate: 0 -22%; scale: 0.95 1.07; }
+  50% { translate: 0 0; scale: 1.08 0.88; }
+  66% { translate: 0 -10%; scale: 0.98 1.03; }
+  82% { translate: 0 0; scale: 1.04 0.95; }
+  100% { translate: 0 0; scale: 1 1; }
+}
+
+/* Pop: snaps into view with an overshoot, the way a bubble appears. */
+@keyframes anim-pop {
+  from { opacity: 0; scale: 0.2; }
+  55% { opacity: 1; scale: 1.18; }
+  75% { scale: 0.96; }
+  to { opacity: 1; scale: 1; }
+}
+@keyframes anim-pop-out {
+  from { opacity: 1; scale: 1; }
+  30% { opacity: 1; scale: 1.18; }
+  to { opacity: 0; scale: 0.2; }
+}
+
+/* Wave: leans and swings from side to side, like a hand waving. */
+@keyframes anim-wave {
+  0% { rotate: 0deg; translate: 0 0; }
+  15% { rotate: -14deg; translate: -3% -2%; }
+  35% { rotate: 11deg; translate: 3% -5%; }
+  55% { rotate: -8deg; translate: -2% -2%; }
+  75% { rotate: 5deg; translate: 1% -4%; }
+  100% { rotate: 0deg; translate: 0 0; }
+}
+
+/* Water wave: rides a swell — a slow bob with a soft squash, twice over. */
+@keyframes anim-water-wave {
+  0% { translate: 0 0; scale: 1 1; }
+  20% { translate: 0 -8%; scale: 0.98 1.05; }
+  40% { translate: 0 0; scale: 1.03 0.97; }
+  60% { translate: 0 -6%; scale: 0.99 1.03; }
+  80% { translate: 0 0; scale: 1.02 0.98; }
+  100% { translate: 0 0; scale: 1 1; }
+}
+
+/* Water drip: falls in, lands with a squash, then settles. */
+@keyframes anim-water-drip {
+  from { opacity: 0; translate: 0 -110%; scale: 0.86 1.18; }
+  50% { opacity: 1; translate: 0 -6%; scale: 0.94 1.08; }
+  68% { translate: 0 0; scale: 1.14 0.84; }
+  84% { translate: 0 -3%; scale: 1.01 0.99; }
+  to { opacity: 1; translate: 0 0; scale: 1 1; }
+}
+@keyframes anim-water-drip-out {
+  from { opacity: 1; translate: 0 0; scale: 1 1; }
+  30% { translate: 0 0; scale: 1.14 0.84; }
+  to { opacity: 0; translate: 0 -110%; scale: 0.86 1.18; }
+}
+
 @keyframes anim-flash {
   from { opacity: 0; }
   50% { opacity: 1; }
@@ -2795,6 +2853,212 @@ input[type="range"]::-webkit-slider-thumb {
   0%, 100% { opacity: 1; }
   25%, 75% { opacity: 0.15; }
   50% { opacity: 1; }
+}
+
+/* ----------------------------------------------------------------------- *
+ * Slide transitions
+ *
+ * One slide arriving over the one before it. Three stacked layers make every
+ * transition in `shared/transitions.js`:
+ *   .transition-hold  the slide being left behind
+ *   .transition-run   the slide arriving, which carries the animation
+ *   .transition-fx    decoration for the two that need it (burn, sparkle)
+ * `--transition-ms` is set inline from the catalog's duration, so the CSS and the
+ * catalog can never disagree about how long a transition takes.
+ * ----------------------------------------------------------------------- */
+
+.slide-transition {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 1;
+}
+.transition-hold,
+.transition-run {
+  position: absolute;
+  inset: 0;
+}
+.transition-run {
+  animation-duration: var(--transition-ms, 800ms);
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform, opacity, clip-path;
+}
+
+/* Fade: the new slide dissolves in over the old one. */
+@keyframes transition-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.transition-run.run-fade { animation-name: transition-fade; }
+
+/* Cover: the new slide slides in from the right, over the top of the old one. */
+@keyframes transition-cover {
+  from { translate: 100% 0; }
+  to { translate: 0 0; }
+}
+.transition-run.run-cover {
+  animation-name: transition-cover;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0.24, 1);
+  /* The edge casts a shadow over the slide it is covering. */
+  box-shadow: -26px 0 60px rgba(2, 6, 23, 0.55);
+}
+
+/* Slide: the new slide pushes in and shunts the old one out to the left. */
+@keyframes transition-slide {
+  from { translate: 100% 0; }
+  to { translate: 0 0; }
+}
+@keyframes transition-slide-hold {
+  from { translate: 0 0; }
+  to { translate: -30% 0; }
+}
+.transition-run.run-slide { animation-name: transition-slide; }
+.transition-hold.hold-slide {
+  animation: transition-slide-hold var(--transition-ms, 800ms) both cubic-bezier(0.32, 0.72, 0.24, 1);
+}
+
+/* Open door: the new slide opens out from the centre line. */
+@keyframes transition-openDoor {
+  from { clip-path: inset(0 50% 0 50%); scale: 1.06; }
+  60% { scale: 1.01; }
+  to { clip-path: inset(0 0 0 0); scale: 1; }
+}
+.transition-run.run-openDoor { animation-name: transition-openDoor; }
+/* The seam the two halves open along. */
+.transition-run.run-openDoor::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.55), rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.55));
+  animation: transition-openDoor-seam var(--transition-ms, 950ms) both ease-out;
+}
+@keyframes transition-openDoor-seam {
+  from { opacity: 1; }
+  70% { opacity: 0.5; }
+  to { opacity: 0; }
+}
+
+/* Slice: the slide arrives in four bands, one after the other. Every stop keeps the
+   same sixteen points, which is what lets clip-path animate between them. */
+@keyframes transition-slice {
+  0% {
+    clip-path: polygon(
+      0 0, 0 0, 0 25%, 0 25%,
+      0 25%, 0 25%, 0 50%, 0 50%,
+      0 50%, 0 50%, 0 75%, 0 75%,
+      0 75%, 0 75%, 0 100%, 0 100%
+    );
+  }
+  25% {
+    clip-path: polygon(
+      0 0, 100% 0, 100% 25%, 0 25%,
+      0 25%, 0 25%, 0 50%, 0 50%,
+      0 50%, 0 50%, 0 75%, 0 75%,
+      0 75%, 0 75%, 0 100%, 0 100%
+    );
+  }
+  50% {
+    clip-path: polygon(
+      0 0, 100% 0, 100% 25%, 0 25%,
+      0 25%, 100% 25%, 100% 50%, 0 50%,
+      0 50%, 0 50%, 0 75%, 0 75%,
+      0 75%, 0 75%, 0 100%, 0 100%
+    );
+  }
+  75% {
+    clip-path: polygon(
+      0 0, 100% 0, 100% 25%, 0 25%,
+      0 25%, 100% 25%, 100% 50%, 0 50%,
+      0 50%, 100% 50%, 100% 75%, 0 75%,
+      0 75%, 0 75%, 0 100%, 0 100%
+    );
+  }
+  100% {
+    clip-path: polygon(
+      0 0, 100% 0, 100% 25%, 0 25%,
+      0 25%, 100% 25%, 100% 50%, 0 50%,
+      0 50%, 100% 50%, 100% 75%, 0 75%,
+      0 75%, 100% 75%, 100% 100%, 0 100%
+    );
+  }
+}
+.transition-run.run-slice {
+  animation-name: transition-slice;
+  animation-timing-function: linear;
+}
+
+/* Burn away: the old slide burns off from the bottom up, under a glowing edge. */
+@keyframes transition-burnAway-hold {
+  from { clip-path: inset(0 0 0 0); filter: sepia(0.45) saturate(1.8) brightness(1.05); }
+  to { clip-path: inset(0 0 100% 0); filter: sepia(0.9) saturate(2.6) brightness(1.25); }
+}
+@keyframes transition-burnAway-in {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+.transition-hold.hold-burnAway {
+  animation: transition-burnAway-hold var(--transition-ms, 1100ms) both ease-in;
+}
+.transition-run.run-burnAway { animation-name: transition-burnAway-in; }
+/* The band that sweeps up with the burn: a char line with amber behind it, so it
+   reads on a light slide as well as a dark one. */
+.transition-burn {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  height: 30%;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(24, 12, 4, 0.6) 0%,
+    rgba(249, 115, 22, 0.95) 16%,
+    rgba(255, 214, 102, 0.92) 42%,
+    rgba(234, 88, 12, 0.5) 70%,
+    rgba(15, 23, 42, 0) 100%
+  );
+  filter: blur(1px) saturate(1.15);
+  animation: transition-burnAway-sweep var(--transition-ms, 1100ms) both ease-in;
+}
+@keyframes transition-burnAway-sweep {
+  from { translate: 0 120%; opacity: 0.2; }
+  15% { opacity: 1; }
+  to { translate: 0 -110%; opacity: 0; }
+}
+
+/* Sparkle: the slide lands behind a burst of points. */
+@keyframes transition-sparkle-in {
+  from { opacity: 0; scale: 1.05; filter: brightness(1.4); }
+  40% { opacity: 1; }
+  to { opacity: 1; scale: 1; filter: none; }
+}
+.transition-run.run-sparkle { animation-name: transition-sparkle-in; }
+.transition-sparkles {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.transition-sparkles i {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0 26%, #fde68a 46%, rgba(253, 224, 71, 0) 74%);
+  /* A thin rim keeps the points visible on a pale slide, the glow on a dark one. */
+  box-shadow: 0 0 0 1px rgba(180, 83, 9, 0.35), 0 0 16px 4px rgba(253, 224, 71, 0.85);
+  animation: transition-sparkle 900ms both ease-out;
+}
+@keyframes transition-sparkle {
+  from { opacity: 0; scale: 0.2; }
+  35% { opacity: 1; scale: 1.2; }
+  to { opacity: 0; scale: 0.4; }
 }
 
 /* Presenter step counter */
