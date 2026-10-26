@@ -78,16 +78,28 @@ function ShapeNodeEditor({ element, scale, onPointDrag, onInsert, onRemove, onBe
   const rings = shapeLocalRings(element);
   const d = ringsToD(rings);
   const toLocal = (point) => ({ x: (point.x / LOCAL_BOX) * w, y: (point.y / LOCAL_BOX) * h });
-  const anchor = 9 / scale;
-  const dot = 7 / scale;
-  const bend = 8 / scale;
+  // Small, light handles: big enough to grab, small enough to see the object.
+  const anchor = 6.5 / scale;
+  const dot = 5 / scale;
+  const bend = 6 / scale;
   return (
     <svg
       className="node-editor"
       viewBox={`0 0 ${w} ${h}`}
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible' }}
     >
-      <path className="node-outline" d={d} fill="none" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      {/* The colours are written on the shapes as well as in the stylesheet, so the
+          dots are orange in any build, not just the ones that ship the latest CSS. */}
+      <path
+        className="node-outline"
+        d={d}
+        fill="none"
+        stroke="#f97316"
+        strokeOpacity={0.9}
+        strokeWidth={1}
+        strokeDasharray="4 3"
+        vectorEffect="non-scaling-stroke"
+      />
       <path
         className="node-hit"
         d={d}
@@ -110,30 +122,39 @@ function ShapeNodeEditor({ element, scale, onPointDrag, onInsert, onRemove, onBe
             <g key={`p-${ringIndex}-${pointIndex}`}>
               {out && (
                 <>
-                  <line className="node-handle-line" x1={at.x} y1={at.y} x2={out.x} y2={out.y} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                  <line className="node-handle-line" x1={at.x} y1={at.y} x2={out.x} y2={out.y} stroke="#fdba74" strokeOpacity={0.85} strokeWidth={1} vectorEffect="non-scaling-stroke" />
                   <circle
                     className="node-handle"
                     cx={out.x}
                     cy={out.y}
                     r={dot}
+                    fill="#fdba74"
+                    stroke="#f97316"
+                    strokeWidth={1}
                     onPointerDown={(event) => onPointDrag(event, ringIndex, pointIndex, 'out')}
                   />
                 </>
               )}
               {into && (
                 <>
-                  <line className="node-handle-line" x1={at.x} y1={at.y} x2={into.x} y2={into.y} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                  <line className="node-handle-line" x1={at.x} y1={at.y} x2={into.x} y2={into.y} stroke="#fdba74" strokeOpacity={0.85} strokeWidth={1} vectorEffect="non-scaling-stroke" />
                   <circle
                     className="node-handle"
                     cx={into.x}
                     cy={into.y}
                     r={dot}
+                    fill="#fdba74"
+                    stroke="#f97316"
+                    strokeWidth={1}
                     onPointerDown={(event) => onPointDrag(event, ringIndex, pointIndex, 'in')}
                   />
                 </>
               )}
               <rect
                 className="node-anchor"
+                fill="#f97316"
+                stroke="#ffffff"
+                strokeWidth={1.2}
                 x={at.x - anchor / 2}
                 y={at.y - anchor / 2}
                 width={anchor}
@@ -165,6 +186,9 @@ function ShapeNodeEditor({ element, scale, onPointDrag, onInsert, onRemove, onBe
             <rect
               key={`bend-${ringIndex}-${segmentIndex}`}
               className={`node-bend${curved ? ' curved' : ''}`}
+              fill={curved ? '#ea580c' : '#fdba74'}
+              stroke="#ffffff"
+              strokeWidth={1.2}
               x={at.x - bend / 2}
               y={at.y - bend / 2}
               width={bend}
@@ -1200,7 +1224,7 @@ export default function EditorCanvas({
       {pointEditId && (
         <div className="canvas-hint">
           <Icon name="node" size={15} />
-          Vector edit — drag a square to move a point, drag the outline to curve it, click the outline to add one · Enter or Esc locks the shape
+          Vector edit ï¿½ drag a square to move a point, drag the outline to curve it, click the outline to add one ï¿½ Enter or Esc locks the shape
         </div>
       )}
       {(groupBox || selection) && (

@@ -36,6 +36,27 @@ function step(message) {
   console.log(`\n==> ${message}`);
 }
 
+/**
+ * Delete the previous build, or say plainly why it cannot be replaced.
+ *
+ * A running copy of the app holds the file open, and Windows refuses to delete or
+ * overwrite it — which used to surface as a bare `EPERM` in the middle of the
+ * build. The app has to be closed before it can be rebuilt, so say so.
+ */
+function removePreviousExe(file) {
+  if (!fs.existsSync(file)) return;
+  try {
+    fs.rmSync(file, { force: true });
+  } catch (error) {
+    if (error.code !== 'EPERM' && error.code !== 'EBUSY' && error.code !== 'EACCES') throw error;
+    console.error('');
+    console.error(`   ${path.relative(root, file)} is in use — a running copy of the app holds it open.`);
+    console.error('   Close Slidesmith (check the notification area for a running instance) and build again.');
+    console.error('   Tip: `npm run preview:app` runs the same app from source and never locks the build.');
+    process.exit(1);
+  }
+}
+
 if (!fs.existsSync(generatedClient)) {
   console.error('The client build has not been embedded yet.');
   console.error('Run `npm run build:client && node scripts/embed-client.mjs` first, or use `npm run build:exe`.');
@@ -84,7 +105,7 @@ execFileSync(process.execPath, ['--experimental-sea-config', configPath], { stdi
 console.log(`   blob -> ${path.relative(root, blobPath)} (${kb(blobPath)})`);
 
 step(`Copying the Node runtime to ${exeName}`);
-fs.rmSync(exePath, { force: true });
+removePreviousExe(exePath);
 fs.copyFileSync(process.execPath, exePath);
 fs.chmodSync(exePath, 0o755);
 
