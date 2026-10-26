@@ -85,6 +85,8 @@ export default function Ribbon({
           </Popover>
         </div>
 
+        {brand ? <div className="ribbon-brand">{brand}</div> : null}
+
         <div className="ribbon-quick">{quick}</div>
 
         <nav className="ribbon-tabs" role="tablist" aria-label="Ribbon tabs">
@@ -106,16 +108,6 @@ export default function Ribbon({
         </nav>
 
         <div className="ribbon-right">{right}</div>
-      </div>
-
-      <div className="ribbon-body" role="tabpanel" aria-label={`${tab.label} tab`}>
-        {brand ? <div className="ribbon-body-brand">{brand}</div> : null}
-        {tab.groups.map((group) => (
-          <div className="ribbon-group" key={`${tab.id}-${group.id}`}>
-            <div className="ribbon-group-items">{group.items.map((item) => drawItem(item))}</div>
-            <span className="ribbon-group-label">{group.label}</span>
-          </div>
-        ))}
       </div>
     </header>
   );

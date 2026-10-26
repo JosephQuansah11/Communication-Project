@@ -7,6 +7,7 @@ import TableEditor from '../components/TableEditor.jsx';
 import MediaLightbox from '../components/MediaLightbox.jsx';
 import PresentDialog from '../components/PresentDialog.jsx';
 import Ribbon from '../components/Ribbon.jsx';
+import RibbonPanel from '../components/RibbonPanel.jsx';
 import ContextMenu from '../components/ContextMenu.jsx';
 import FindReplacePanel from '../components/FindReplacePanel.jsx';
 import DocumentTabs from '../components/DocumentTabs.jsx';
@@ -170,6 +171,12 @@ export default function Editor({ deckId, navigate }) {
   const [animStep, setAnimStep] = useState(null);
   const [ribbonTab, setRibbonTab] = useState('home');
   const [panels, setPanels] = useState({ rail: true, inspector: true, tabs: true });
+  /**
+   * The active tab's tools live in the right-hand column, above the inspector, so
+   * the window has one toolbar row instead of two. The panel folds away when the
+   * full height is wanted for the inspector.
+   */
+  const [tabPanelOpen, setTabPanelOpen] = useState(true);
   const [formatClip, setFormatClip] = useState(null);
   const [findQuery, setFindQuery] = useState('');
   /** Find & replace: the panel, the replacement and how it matches. */
@@ -2936,7 +2943,6 @@ export default function Editor({ deckId, navigate }) {
         activeTab={ribbonTab}
         onTabChange={setRibbonTab}
         onAction={handleRibbonAction}
-        renderItem={renderRibbonItem}
         platform={platform}
         state={{
           toggleRail: panels.rail,
@@ -3282,6 +3288,37 @@ export default function Editor({ deckId, navigate }) {
           </div>
         </main>
 
+        <aside className="inspector-column">
+          <RibbonPanel
+            activeTab={ribbonTab}
+            onAction={handleRibbonAction}
+            renderItem={renderRibbonItem}
+            platform={platform}
+            open={tabPanelOpen}
+            onToggle={setTabPanelOpen}
+            state={{
+              toggleRail: panels.rail,
+              toggleInspector: panels.inspector,
+              toggleTabs: panels.tabs,
+              formatPainter: Boolean(formatClip),
+              penTool: tool === 'pen',
+              editPoints: pointEditId === selectedId,
+            }}
+            disabled={{
+              paste: !selectedIds.length,
+              duplicate: !selectedIds.length,
+              delete: !selectedIds.length,
+              groupShapes: selectedElements.length < 2,
+              ungroupShapes: !hasGroup(slideElements, selectedIds),
+              toPath: !selectedElement || !['shape', 'image'].includes(selectedElement.type),
+              cornerRadius: !selectedElement || selectedElement.type !== 'shape',
+              shapeUnion: selectedElements.length < 2,
+              shapeSubtract: selectedElements.length < 2,
+              shapeIntersect: selectedElements.length < 2,
+              shapeExclude: selectedElements.length < 2,
+              maskShape: selectedElements.length < 2,
+            }}
+          />
         <Inspector
           deck={deck}
           slide={slide}
@@ -3319,6 +3356,7 @@ export default function Editor({ deckId, navigate }) {
           onUpload={upload}
           onAddShapeImage={addShapeImage}
         />
+        </aside>
       </div>
 
       {tableTarget && (

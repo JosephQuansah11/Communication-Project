@@ -339,9 +339,15 @@ export const RIBBON_TABS = [
         id: 'panels',
         label: 'Panels',
         items: [
-          { id: 'toggleRail', label: 'Slide rail', icon: 'layers', toggle: true },
-          { id: 'toggleInspector', label: 'Properties', icon: 'settings', toggle: true },
-          { id: 'toggleTabs', label: 'Document tabs', icon: 'folder', toggle: true },
+          { id: 'toggleRail', label: 'Slide rail', icon: 'layers', toggle: true, title: 'Show or hide the slide thumbnails' },
+          {
+            id: 'toggleInspector',
+            label: 'Properties',
+            icon: 'settings',
+            toggle: true,
+            title: 'Show or hide the inspector — the active tab’s tools stay in the column',
+          },
+          { id: 'toggleTabs', label: 'Document tabs', icon: 'folder', toggle: true, title: 'Show or hide the open-deck tabs' },
         ],
       },
       {

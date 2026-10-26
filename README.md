@@ -76,16 +76,20 @@ npm run smoke -- http://localhost:3000
 ## What is implemented
 
 ### Window & ribbon
-- The editor is a **WPS-style window**: a ribbon with the *File / Home / Insert / Design / Transitions /
-  Animations / Slide Show / Review / View / Tools* tabs, each showing labelled groups of controls
-  (Clipboard, Slides, Font, Paragraph, Insert, Arrange, Editing, Background, Slide size, Timing, …).
+- The editor is a **WPS-style window** with **one toolbar row**: *File*, the quick-access cluster, the tab strip
+  (*Home / Insert / Design / Transitions / Animations / Slide Show / Review / View / Tools*) and the deck title with
+  *Present*.
+- **Clicking a tab changes the right-hand column**, not a second toolbar: the active tab's labelled groups
+  (Clipboard, Slides, Font, Paragraph, Insert, Arrange, Editing, Background, Slide size, Timing, …) appear as compact
+  chips above the inspector. The panel has a chevron in its header to fold it away when the inspector needs the room.
 - The **File** button opens the presentation menu (new, open library, save, import, duplicate, export JSON, delete)
   and the quick-access cluster next to it holds save / undo / redo.
 - A **document tab strip** sits under the ribbon: every deck you open appears as a tab with its own accent, a × to
   close it (middle-click works too), a **+ New** button and a collapse toggle. Tabs are remembered per browser, so
   the presentations you had open come back the next time the window opens.
-- Everything the ribbon does is reachable without it: the inspector on the right still carries the detailed
-  controls, and **View ▸ Panels** hides or shows the slide rail, the inspector and the tab strip.
+- Everything the tab panel does is reachable without it: the inspector carries the detailed controls, **View ▸
+  Panels** hides or shows the slide rail, the inspector and the tab strip — hiding the inspector keeps the tab tools
+  on screen and hands its space back to the canvas.
 - **Slide layouts** (*Home ▸ Layout*) rebuild the current slide as a title slide, title + content, two content,
   section header, picture-right or blank, and **Sections** (*Home ▸ Section*) group slides into named, collapsible
   blocks in the rail.

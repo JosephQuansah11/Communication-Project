@@ -3005,37 +3005,6 @@ input[type="range"]::-webkit-slider-thumb {
 .ribbon-right .dimension-chip { white-space: nowrap; }
 
 
-.ribbon-body {
-  display: flex;
-  align-items: stretch;
-  min-height: 74px;
-  padding: 8px 10px 4px;
-  overflow-x: auto;
-}
-.ribbon-body-brand {
-  display: flex;
-  align-items: flex-start;
-  padding-right: 10px;
-  margin-right: 4px;
-  border-right: 1px solid var(--line);
-}
-.ribbon-group {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  padding: 0 12px;
-  border-right: 1px solid var(--line);
-}
-.ribbon-group:last-child { border-right: none; }
-.ribbon-group-items { display: flex; align-items: flex-start; gap: 4px; }
-.ribbon-group-label {
-  font-size: 11.5px;
-  letter-spacing: 0.04em;
-  color: var(--faint);
-  white-space: nowrap;
-}
 .ribbon-item {
   display: inline-flex;
   align-items: center;
@@ -3346,11 +3315,110 @@ input[type="range"]::-webkit-slider-thumb {
 .element-text > .text-content,
 .element-text > .inline-text-editor { position: relative; z-index: 1; }
 
-.editor-shell.rail-hidden .slide-rail { display: none; }
+/* ----------------------------------------------------------------------- *
+ * Right-hand column: the active tab's tools, then the inspector
+ * ----------------------------------------------------------------------- */
+
+.inspector-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #0b1120;
+  border-left: 1px solid var(--line);
+}
+.inspector-column .inspector {
+  flex: 1 1 auto;
+  border-left: none;
+}
+
+.ribbon-brand {
+  display: flex;
+  align-items: center;
+  padding-right: 10px;
+  margin-right: 4px;
+  border-right: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+
+.tab-panel {
+  flex: 0 0 auto;
+  max-height: 46vh;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--line);
+  background: #0e1526;
+}
+.tab-panel-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px 6px;
+  background: rgba(14, 21, 38, 0.97);
+  backdrop-filter: blur(10px);
+}
+.tab-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 12px 14px;
+}
+.tab-panel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tab-panel-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.tab-panel-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* Every control is a chip: the big ribbon buttons become compact rows here. */
+.tab-panel .ribbon-item {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  background: rgba(148, 163, 184, 0.05);
+}
+.tab-panel .ribbon-item.large span {
+  font-size: 12.5px;
+}
+.tab-panel .ribbon-item:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.14);
+  border-color: var(--line);
+}
+.tab-panel .ribbon-item.on {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+/* Widgets the editor draws itself (colour pickers, sliders, the shape grid) take
+   a row of their own, the way they sat in the ribbon. */
+.tab-panel-control {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+
 .editor-shell.inspector-hidden .inspector { display: none; }
 .editor-shell.rail-hidden .editor-main { grid-template-columns: minmax(0, 1fr) 360px; }
-.editor-shell.inspector-hidden .editor-main { grid-template-columns: 233px minmax(0, 1fr); }
-.editor-shell.rail-hidden.inspector-hidden .editor-main { grid-template-columns: minmax(0, 1fr); }
+/* Hiding the inspector keeps the column (and the tab tools in it) but hands the
+   space back to the canvas. */
+.editor-shell.inspector-hidden .editor-main { grid-template-columns: 233px minmax(0, 1fr) 300px; }
+.editor-shell.rail-hidden.inspector-hidden .editor-main { grid-template-columns: minmax(0, 1fr) 300px; }
 
 .shortcuts-card {
   width: min(560px, 92vw);
@@ -3387,16 +3455,18 @@ input[type="range"]::-webkit-slider-thumb {
 
 @media (max-width: 1180px) {
   .ribbon-right .deck-title-input { width: 170px; }
-  .ribbon-body { min-height: 70px; }
+  .tab-panel { max-height: 38vh; }
   .ribbon-notes textarea { width: 240px; }
 }
 @media (max-width: 860px) {
   .ribbon-right .deck-title-input,
   .ribbon-right .save-state { display: none; }
-  /* Below this width the rail and the inspector are hidden anyway. */
+  /* Below this width the rail is hidden anyway; the tools column stays so the tab
+     panels are still reachable, just narrower. */
   .editor-shell.rail-hidden .editor-main,
   .editor-shell.inspector-hidden .editor-main,
-  .editor-shell.rail-hidden.inspector-hidden .editor-main { grid-template-columns: 1fr; }
+  .editor-shell.rail-hidden.inspector-hidden .editor-main { grid-template-columns: minmax(0, 1fr) 260px; }
+  .tab-panel { max-height: 34vh; }
 /* ------------------------------------------------------------------ *
  * Find & replace
  * ------------------------------------------------------------------ */
