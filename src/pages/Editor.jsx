@@ -151,8 +151,16 @@ export default function Editor({ deckId, navigate }) {
   const [tool, setTool] = useState('select');
   /** The custom path whose anchors are being edited. */
   const [nodeEditId, setNodeEditId] = useState(null);
-  /** The edit dots sit on the selected object unless the user hides them. */
-  const [showPoints, setShowPoints] = useState(true);
+  /**
+   * Vector Edit: the object whose dots are on screen right now.
+   *
+   * Selecting a shape or a picture opens it, so the dots are there the moment an
+   * object is picked; Enter or Esc (or a click anywhere off the dots) locks the
+   * shape and hands the normal resize handles back.
+   */
+  const [pointEditId, setPointEditId] = useState(null);
+  /** What the automatic entry has already handled, and what the user locked. */
+  const pointEditRef = useRef({ auto: null, locked: null });
   const [tableTargetId, setTableTargetId] = useState(null);
   const [lightbox, setLightbox] = useState(null);
   const [presentOpen, setPresentOpen] = useState(false);
@@ -1642,6 +1650,32 @@ export default function Editor({ deckId, navigate }) {
    * records one history step); adding or removing a point is a single action and
    * records straight away.
    */
+  /**
+   * Vector Edit opens by itself when a shape or a picture is picked — the dots are
+   * on the object the moment it is selected — and it stays open for that object
+   * until the user locks it with Enter, Esc or a click anywhere else.
+   */
+  useEffect(() => {
+    const element = selectedElements.length === 1 ? selectedElements[0] : null;
+    const state = pointEditRef.current;
+    if (!isEditablePath(element)) {
+      if (state.auto || pointEditId) {
+        pointEditRef.current = { auto: null, locked: null };
+        setPointEditId(null);
+      }
+      return;
+    }
+    if (element.id === state.auto) return;
+    if (state.locked === element.id) return;
+    pointEditRef.current = { auto: element.id, locked: null };
+    setPointEditId(element.id);
+  }, [selectedIds, slideElements]);
+
+  /** Leaving the select tool always locks the shape. */
+  useEffect(() => {
+    if (tool !== 'select' && pointEditId) lockPointEdit();
+  }, [tool]);
+
   /** A dot drag: previews while it moves, records when the drag ends. */
   const patchPath = (id, rings, record = false) => patchElement(id || nodeEditId || selectedId, { path: { rings } }, record);
 
@@ -1704,15 +1738,39 @@ export default function Editor({ deckId, navigate }) {
     return convertToPath(element) || [];
   };
 
-  /** The ribbon's Edit points button shows or hides the dots on the selection. */
+  const isEditablePath = (element) => Boolean(element) && (element.type === 'shape' || element.type === 'image');
+
+  /** Open Vector Edit on an object: dots on screen, resize handles off. */
+  const enterPointEdit = (id) => {
+    if (!id) return;
+    pointEditRef.current = { auto: id, locked: null };
+    setPointEditId(id);
+  };
+
+  /**
+   * Lock the custom shape: the dots go, the selection stays, so the object can be
+   * moved and resized with the normal handles again. This is what Enter, Esc and a
+   * click anywhere off the dots all do.
+   */
+  const lockPointEdit = () => {
+    setPointEditId((current) => {
+      if (current) pointEditRef.current = { auto: current, locked: current };
+      return null;
+    });
+  };
+
+  /** The ribbon and inspector's Edit points: open the dots, or lock the shape. */
   const toggleEditPoints = () => {
-    const next = !showPoints;
-    setShowPoints(next);
+    const element = selectedElement;
+    if (!isEditablePath(element)) {
+      setToast({ type: 'error', message: 'Select a shape or a picture first, then edit its points.' });
+      return;
+    }
+    if (pointEditId === element.id) return lockPointEdit();
+    enterPointEdit(element.id);
     setToast({
       type: 'info',
-      message: next
-        ? 'Edit dots on: drag a square to move a point, a diamond to bend an edge, Alt-click to remove one.'
-        : 'Edit dots hidden — the inspector still has corner radius, and Edit points brings them back.',
+      message: 'Vector edit: drag a square to move a point, a diamond to bend an edge, drag the outline to curve it, click the outline to add a point. Enter or Esc locks the shape.',
     });
   };
 
@@ -2668,6 +2726,12 @@ export default function Editor({ deckId, navigate }) {
         target &&
         (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
       if (event.key === 'Escape') {
+        // Locking a custom shape comes before anything else, and keeps the object
+        // selected so it can be moved and resized again.
+        if (pointEditId) {
+          lockPointEdit();
+          return;
+        }
         // Leaving a shape tool comes before anything else.
         if (tool !== 'select') {
           setTool('select');
@@ -2697,6 +2761,11 @@ export default function Editor({ deckId, navigate }) {
         return openFindPanel('replace');
       }
       if (typing) return;
+      // Enter opens or locks Vector Edit on the selected shape or picture.
+      if (event.key === 'Enter' && isEditablePath(selectedElement)) {
+        event.preventDefault();
+        return toggleEditPoints();
+      }
       // The pen and the point editor own the keyboard while they are active.
       if (tool !== 'select') return;
       if (mod && event.key.toLowerCase() === 'z') {
@@ -2875,7 +2944,7 @@ export default function Editor({ deckId, navigate }) {
           toggleTabs: panels.tabs,
           formatPainter: Boolean(formatClip),
           penTool: tool === 'pen',
-          editPoints: showPoints,
+          editPoints: pointEditId === selectedId,
         }}
         disabled={{
           // Commands that need something selected, or two objects, say so up front.
@@ -3168,7 +3237,12 @@ export default function Editor({ deckId, navigate }) {
             onBegin={begin}
             onEnd={end}
             onOpenTable={openTable}
-            onExpand={setLightbox}
+            onExpand={(element) => {
+              // Double-clicking a shape or a picture opens Vector Edit on it, the
+              // way Figma does; a video or audio object opens in the lightbox.
+              if (isEditablePath(element)) return enterPointEdit(element.id);
+              setLightbox(element);
+            }}
             onDropFile={onDropFile}
             editingTextId={editingTextId}
             onStartTextEdit={(id) => {
@@ -3180,7 +3254,8 @@ export default function Editor({ deckId, navigate }) {
             onCreateText={createTextAt}
             tool={tool}
             nodeEditId={nodeEditId}
-            showPoints={showPoints}
+            pointEditId={pointEditId}
+            onExitPointEdit={lockPointEdit}
             onEnsurePath={ensurePath}
             onToolChange={setTool}
             onCreatePath={createPathFromPen}

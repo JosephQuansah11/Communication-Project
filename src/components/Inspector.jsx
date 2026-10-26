@@ -979,9 +979,30 @@ export default function Inspector({
             </div>
             <div className="field compact">
               <label>Border</label>
-              <input type="color" className="color-input" value={element.stroke || '#e2e8f0'} onChange={(event) => patch({ stroke: event.target.value })} />
+              <input
+                type="color"
+                className="color-input"
+                value={element.stroke || '#e2e8f0'}
+                onChange={(event) => patch({ stroke: event.target.value, strokeWidth: element.strokeWidth || 2 })}
+              />
             </div>
+            <NumberField
+              label="Border width"
+              value={element.strokeWidth || 0}
+              min={0}
+              max={40}
+              onChange={(strokeWidth) => patch({ strokeWidth, ...(strokeWidth && !element.stroke ? { stroke: '#e2e8f0' } : {}) })}
+              suffix="px"
+            />
           </div>
+          {element.stroke && (element.strokeWidth || 0) > 0 && (
+            <div className="row-gap wrap">
+              <button type="button" className="wide-btn" onClick={() => patch({ strokeWidth: 0 })}>
+                <Icon name="close" size={16} /> Remove border
+              </button>
+              <small className="field-hint">The border follows the corner radius and is drawn on top of the picture.</small>
+            </div>
+          )}
           <div className="field">
             <label>Crop to shape</label>
             <select className="text-input" value={element.clipShape || 'none'} onChange={(event) => patch({ clipShape: event.target.value })}>

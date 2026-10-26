@@ -232,6 +232,9 @@ The inspector shows a **system** badge and the editor footer shows the active fo
 - **Full screen presentation is on by default** (when the output targets another display): the output window takes
   over that screen like `F11`. `F` (or `F11`) toggles full screen in the console; `Esc` leaves full screen **and
   stops presenting**, returning you to the editor.
+- **Ending the show closes its windows.** `Esc` (once nothing else wants it) and *End presentation* both send the
+  end signal, which closes the audience window and the console window itself. A browser only lets a script close a
+  window it opened, so a show that was opened in the editor's own tab falls back to navigating back to the editor.
 - Fallback for browsers without multi-screen APIs plus manual drag/full-screen guidance.
 - Presenter view: next/previous with arrows/space, progress bar, timer, speaker notes + next-slide preview,
   blackout, fill-screen toggle, live table editing and instant exit. Clicking the console — or the letterbox area
@@ -289,18 +292,24 @@ shape — a fill (or a picture fill), a border, text, rotation and animation all
 - **Pen tool.** *Insert ▸ Shape tools ▸ Pen* draws a shape point by point: click for a corner, click-and-drag to pull
   bezier handles out of the point, click the first dot again (or press Enter) to close it, Esc to throw it away and
   Backspace to drop the last point. A shape you leave open is drawn as a line.
-- **The edit dots are always there.** Selecting a shape or a picture puts **orange dots straight on top of it** — no
-  mode to enter: a **square** on every anchor (corner or curve point), a **diamond** in the middle of every edge, and
-  a small round dot wherever a point already has curve handles. Drag a square to move that point, a diamond to bend
-  that edge (the curve follows the pointer exactly, like an image editor's Bend tool), double-click the outline to
-  add a point and Alt-click one to remove it or straighten a bent edge. *Edit points* in the ribbon simply shows or
-  hides the dots.
+- **Vector Edit mode, the Figma way.** Selecting a shape or a picture opens it: the **orange dots sit on the object**
+  and the normal selection handles step aside. **Enter** or **Esc** (or a click anywhere off the dots) *locks* the
+  custom shape — the object stays selected and the resize handles come back — and **double-click** or **Enter** opens
+  the dots again.
+  - A **square** sits on every anchor (corner or curve point): drag it to stretch or skew the geometry.
+  - A **diamond** sits in the middle of every edge: drag it to bend that edge, the way an image editor's Bend tool
+    does; Alt-click it to straighten the edge again.
+  - The **outline itself** is a target: hover it for a **"+" cursor and click to drop a new anchor**, or **drag it**
+    to pull the edge out into a curve. Alt-click an anchor to remove it.
+  - A small round dot appears wherever a point already has curve handles, so the curve can be pulled.
 - **Nothing changes until you move a dot.** A rectangle stays a rectangle, a star stays a star and a picture stays a
   picture while the dots are on screen; grabbing one converts that object into an editable path *once* — a picture
   becomes a shape filled with the picture, so the photo survives the reshape — and the whole thing is a single undo
   step. Corner rounding keeps its own controls (the inspector's per-corner grid and the ribbon's *Corners* field),
-  which come back on the canvas as the four little dots when the edit dots are hidden.
-- **Edit points** (ribbon, inspector or right-click) shows or hides the dots for the selected object.
+  which come back on the canvas as the four little dots once the shape is locked.
+- **Borders on pictures.** The image section of the inspector has a **Border** colour and a **Border width**, and the
+  border follows the corner radius, so a picture can be outlined like any shape. Picking a colour turns a 2 px border
+  on straight away, *Remove border* takes it off, and masking the picture into a shape keeps the border with it.
 - **Pictures are shapes too.** Selecting a picture and pressing **Edit points** (ribbon, inspector or right-click)
   turns it into a shape *filled* with the picture — a rectangle by default, or the clip shape it already had — so its
   corners, curves and silhouette can be dragged like any other outline. The picture keeps its fit, and once it is a

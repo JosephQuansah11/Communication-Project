@@ -57,15 +57,17 @@ const hasCornerWidgets = (element) =>
   element?.type === 'shape' && (!element.shape || element.shape === 'rect' || element.shape === 'roundRect');
 
 /**
- * The point editor that sits on top of a selected shape or picture.
+ * The Vector Edit overlay that sits on top of the object being reshaped.
  *
- * It is drawn from the outline the element *currently* has — a rectangle, a
- * preset polygon or a custom path — so the dots are always in the right place
- * without the element having to be a path yet: grabbing one is what turns it into
- * one. Orange squares are the anchors (corners and curve points), orange diamonds
- * bend the edge they sit on, and the round dots pull a point's curve handles.
+ * It is drawn from the outline the element *currently* has — a rectangle, a preset
+ * polygon or a custom path — so the dots are always in the right place without the
+ * element having to be a path yet: grabbing one is what turns it into one. Orange
+ * squares are the anchors (corners and curve points), orange diamonds bend the edge
+ * they sit on, and the round dots pull a point's curve handles. The outline itself
+ * is a target: hover it for a "+" cursor and click to drop a point on it, or drag
+ * it to pull the edge into a curve.
  */
-function ShapeNodeEditor({ element, scale, onPointDrag, onInsert, onRemove, onBend, onStraighten }) {
+function ShapeNodeEditor({ element, scale, onPointDrag, onInsert, onRemove, onBend, onStraighten, onSegmentDrag }) {
   const w = Math.max(1, Number(element.w) || 100);
   const h = Math.max(1, Number(element.h) || 100);
   const rings = shapeLocalRings(element);
@@ -86,7 +88,8 @@ function ShapeNodeEditor({ element, scale, onPointDrag, onInsert, onRemove, onBe
         d={d}
         fill="none"
         stroke="transparent"
-        strokeWidth={Math.max(6, 14 / scale)}
+        strokeWidth={Math.max(6, 16 / scale)}
+        onPointerDown={(event) => onSegmentDrag(event)}
         onDoubleClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -205,7 +208,8 @@ export default function EditorCanvas({
   animStep = null,
   tool = 'select',
   nodeEditId = null,
-  showPoints = true,
+  pointEditId = null,
+  onExitPointEdit,
   onToolChange,
   onCreatePath,
   onEnsurePath,
@@ -217,6 +221,8 @@ export default function EditorCanvas({
   const stageRef = useRef(null);
   const [fit, setFit] = useState(0.5);
   const dragRef = useRef(null);
+  /** Where the pointer was last seen, so a click knows where it landed. */
+  const lastPointer = useRef(null);
   /** Latest `endDrag`, so the window-level pointerup always runs the current one. */
   const endDragRef = useRef(null);
   const [dragging, setDragging] = useState(false);
@@ -335,6 +341,8 @@ export default function EditorCanvas({
    *   the group can be dragged as one — the PowerPoint rule.
    */
   const startMove = (event, element) => {
+    // Any press that is not on a dot or on the outline locks the custom shape.
+    onExitPointEdit?.();
     if (event.button !== 0) return;
     if (event.target.closest('.resize-handle') || event.target.closest('.rotate-handle')) return;
     const additive = event.shiftKey || event.ctrlKey || event.metaKey;
@@ -446,6 +454,8 @@ export default function EditorCanvas({
 
   /** Start a marquee on empty canvas; Shift/Ctrl keeps what is already selected. */
   const startMarquee = (event) => {
+    // Clicking off the object locks its custom shape.
+    onExitPointEdit?.();
     const additive = event.shiftKey || event.ctrlKey || event.metaKey;
     if (!additive) onSelect(null);
     const start = pointFromEvent(event);
@@ -538,6 +548,38 @@ export default function EditorCanvas({
         })),
       }))
     );
+  };
+
+  /**
+   * Grabbing the outline itself: a click drops a new anchor on it, a drag pulls
+   * that edge out into a curve (the Bend tool). Which of the two it is only becomes
+   * clear once the pointer moves, so the drag starts out as "pending insert".
+   */
+  const startSegmentDrag = (event, element) => {
+    event.stopPropagation();
+    event.preventDefault();
+    if (!element) return;
+    const local = localFromEvent(event, element);
+    const target = {
+      x: (local.x / (element.w || 1)) * LOCAL_BOX,
+      y: (local.y / (element.h || 1)) * LOCAL_BOX,
+    };
+    const base = ensureRings(element);
+    const nearest = nearestOnRings(base, target, 24);
+    if (!nearest) return;
+    onBegin();
+    dragRef.current = {
+      mode: 'bend',
+      element,
+      ringIndex: nearest.ringIndex,
+      segmentIndex: nearest.segmentIndex,
+      base,
+      // A click that never moves adds a point instead of curving the edge.
+      pendingInsert: true,
+      origin: { x: event.clientX, y: event.clientY },
+    };
+    setDragging(true);
+    capturePointer(event.currentTarget, event.pointerId);
   };
 
   const startNodeDrag = (event, element, ringIndex, pointIndex, handle = null) => {
@@ -652,6 +694,12 @@ export default function EditorCanvas({
     }
     if (drag.mode === 'bend') {
       // The edge follows the pointer: the curve passes through it exactly.
+      // A press on the outline that has not moved yet is still a "click to add a
+      // point"; only real movement turns it into a bend.
+      if (drag.pendingInsert) {
+        if (Math.hypot(input.clientX - drag.origin.x, input.clientY - drag.origin.y) < 4) return;
+        drag.pendingInsert = false;
+      }
       const local = localFromEvent(input, drag.element);
       const target = {
         x: (local.x / (drag.element.w || 1)) * LOCAL_BOX,
@@ -728,6 +776,7 @@ export default function EditorCanvas({
     if (dragRef.current || penRef.current?.dragging !== null && penRef.current?.dragging !== undefined) {
       event.preventDefault();
     }
+    lastPointer.current = event;
     queueMove.current(moveInput(event));
   };
 
@@ -748,6 +797,24 @@ export default function EditorCanvas({
       const box = drag.box;
       // A plain click (no sweep) is just a deselect, which already happened.
       if (box && box.w > 3 && box.h > 3) onMarquee?.(idsInBox(slide.elements || [], box), drag.additive);
+      return;
+    }
+    // A click on the outline — no drag — drops a new anchor where it was clicked.
+    if (drag.mode === 'bend' && drag.pendingInsert) {
+      const last = lastPointer.current || drag.origin;
+      const local = localFromEvent(last, drag.element);
+      const target = {
+        x: (local.x / (drag.element.w || 1)) * LOCAL_BOX,
+        y: (local.y / (drag.element.h || 1)) * LOCAL_BOX,
+      };
+      const nearest = nearestOnRings(drag.base || [], target, 30);
+      if (nearest) {
+        const next = cloneRings(drag.base || []);
+        next[nearest.ringIndex] = insertRingPoint(next[nearest.ringIndex], nearest.segmentIndex, nearest.t);
+        onPatchPath?.(drag.element.id, next, true);
+        return;
+      }
+      onEnd();
       return;
     }
     onEnd();
@@ -921,7 +988,7 @@ export default function EditorCanvas({
                     animStep={animStep}
                     slideSize={{ width: deck.width, height: deck.height }}
                   />
-                  {(showPoints || nodeEditId === element.id) && primary && !isMulti && !editingTextId && tool === 'select' && (element.type === 'shape' || element.type === 'image') ? (
+                  {pointEditId === element.id && !isMulti && !editingTextId && tool === 'select' ? (
                     <ShapeNodeEditor
                       element={element}
                       scale={scale}
@@ -933,6 +1000,7 @@ export default function EditorCanvas({
                         onPatchPath?.(element.id, removePathPoint(element, ringIndex, pointIndex, rings), true);
                       }}
                       onBend={(event, ringIndex, segmentIndex) => startBendDrag(event, element, ringIndex, segmentIndex)}
+                      onSegmentDrag={(event) => startSegmentDrag(event, element)}
                       onStraighten={(ringIndex, segmentIndex) => {
                         const rings = ensureRings(element);
                         if (!rings[ringIndex]) return;
@@ -958,7 +1026,7 @@ export default function EditorCanvas({
                     !isMulti &&
                     !editingTextId &&
                     tool === 'select' &&
-                    !showPoints &&
+                    pointEditId !== element.id &&
                     hasCornerWidgets(element) &&
                     CORNERS.map((corner) => {
                       const radius = cornerList(element)[corner.key] || 0;
@@ -983,7 +1051,7 @@ export default function EditorCanvas({
                         />
                       );
                     })}
-                  {primary && !isMulti && !editingTextId && (
+                  {primary && !isMulti && !editingTextId && pointEditId !== element.id && (
                     <>
                       <div className="selection-outline" />
                       {HANDLES.map((dir) => (
@@ -1102,7 +1170,7 @@ export default function EditorCanvas({
           )}
         </div>
       </div>
-      {(tool === 'pen' || tool === 'nodes') && (
+      {tool === 'pen' && (
         <div className="canvas-hint">
           <Icon name={tool === 'pen' ? 'pen' : 'node'} size={15} />
           {tool === 'pen'
@@ -1123,6 +1191,12 @@ export default function EditorCanvas({
           <Icon name="zoomIn" size={18} />
         </button>
       </div>
+      {pointEditId && (
+        <div className="canvas-hint">
+          <Icon name="node" size={15} />
+          Vector edit � drag a square to move a point, drag the outline to curve it, click the outline to add one � Enter or Esc locks the shape
+        </div>
+      )}
       {(groupBox || selection) && (
         <div className="canvas-coords" aria-hidden="true">
           {isMulti ? `${selectedElements.length} objects · ` : ''}

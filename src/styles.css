@@ -3576,6 +3576,27 @@ input[type="range"]::-webkit-slider-thumb {
   pointer-events: all;
 }
 
+/* The outline itself is a target in Vector Edit: hovering it shows a "+" cursor so
+   a click drops a new anchor, and dragging it pulls the edge out into a curve. */
+.node-editor .node-hit {
+  cursor: copy;
+  pointer-events: stroke;
+}
+
+.node-editor .node-hit:hover {
+  stroke: rgba(249, 115, 22, 0.45);
+}
+
+.node-editor .node-anchor,
+.node-editor .node-bend {
+  cursor: grab;
+}
+
+.node-editor .node-anchor:active,
+.node-editor .node-bend:active {
+  cursor: grabbing;
+}
+
 .node-editor .node-anchor {
   fill: #f97316;
   stroke: #ffffff;

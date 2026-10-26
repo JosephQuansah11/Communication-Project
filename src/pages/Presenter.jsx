@@ -567,8 +567,14 @@ export default function Presenter({ deckId, navigate }) {
       wsRef.current.send(JSON.stringify({ type: 'end' }));
     }
     if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
-    if (window.opener && !window.opener.closed) window.close();
-    else navigate(`/edit/${deckId}`);
+    // The show window closes itself when the presentation ends — Esc, the End
+    // presentation button and the last slide all come through here. A browser only
+    // lets a script close a window it opened, so when this tab was not opened by
+    // the editor the close is ignored and we fall back to the editor.
+    window.close();
+    setTimeout(() => {
+      if (!window.closed) navigate(`/edit/${deckId}`);
+    }, 250);
   };
   exitRef.current = exit;
   presentStateRef.current = { index, step, blank, fillMode, annotations };
