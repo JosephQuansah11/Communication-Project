@@ -94,20 +94,21 @@ if (process.platform === 'win32') {
     const { writeIcon, ICON_SIZES } = await import('./make-icon.mjs');
     writeIcon(iconPath);
     const { rcedit } = await import('rcedit');
+    const { PUBLISHER } = await import('./sign-exe.mjs');
     await rcedit(exePath, {
       icon: iconPath,
       'file-version': version,
       'product-version': version,
       'version-string': {
-        CompanyName: 'Slidesmith',
+        CompanyName: PUBLISHER,
         FileDescription: 'Slidesmith Studio - presentation workspace',
         InternalFilename: appName,
         OriginalFilename: exeName,
         ProductName: 'Slidesmith Studio',
-        LegalCopyright: 'MIT licensed',
+        LegalCopyright: `MIT licensed - ${PUBLISHER}`,
       },
     });
-    console.log(`   icon (${ICON_SIZES.join('/')}px) and version ${version} applied`);
+    console.log(`   icon (${ICON_SIZES.join('/')}px), version ${version} and publisher "${PUBLISHER}" applied`);
   } catch (error) {
     console.warn(`   skipped: ${error.message}`);
     console.warn('   the app still runs, it just keeps the default Node icon.');
@@ -171,6 +172,18 @@ if (process.platform === 'win32') {
   }
 }
 
+// Signing comes last: it hashes the finished file, so it has to happen after the
+// icon, the version resource, the injected blob and the subsystem flip.
+if (process.platform === 'win32') {
+  step('Signing the executable');
+  const { signFile } = await import('./sign-exe.mjs');
+  const signature = await signFile(exePath);
+  if (!signature.signed && process.env.SLIDESMITH_REQUIRE_SIGNING === '1') {
+    console.error('   SLIDESMITH_REQUIRE_SIGNING=1 and the file could not be signed.');
+    process.exit(1);
+  }
+}
+
 const sizeMb = (fs.statSync(exePath).size / (1024 * 1024)).toFixed(1);
 console.log('');
 console.log('  ==============================================');
@@ -182,8 +195,8 @@ console.log('   "SlidesmithData" folder next to the executable (or in your');
 console.log('   user profile when that folder is not writable).');
 console.log('');
 console.log('   Share the file directly — the recipient needs no Node.js.');
-console.log('   Because the file is unsigned, Windows SmartScreen may warn');
-console.log('   on first run ("More info" -> "Run anyway").');
+console.log('   A signed file carries the publisher name; an unsigned one is');
+console.log('   still "unknown publisher" to SmartScreen and Smart App Control.');
 console.log('');
 
 function kb(file) {

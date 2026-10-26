@@ -53,10 +53,56 @@ Command line flags (optional):
 Environment overrides: `SLIDESMITH_DATA_DIR` moves the data folder, `SLIDESMITH_NO_OPEN=1` disables the
 browser launch, `PORT` sets the port.
 
+### Publisher and signing (SmartScreen / Smart App Control)
+
+The executable is built with the publisher metadata set to **josephQuansah11** — `CompanyName`, the copyright line
+and the version resource all carry it, so *Properties → Details* shows the publisher.
+
+Windows' block dialogs (**Smart App Control**, SmartScreen) do **not** read that metadata, though: they read the
+file's **Authenticode signature**. An unsigned `Slidesmith.exe` is "an app we couldn't find a publisher for" no
+matter what the version resource says. Signing the file is what puts the publisher on it, and the name Windows then
+shows is the subject of the certificate that signed it.
+
+```powershell
+npm run cert:new                       # makes build/certs/josephQuansah11.pfx (self-signed, 3 years)
+$env:SLIDESMITH_CERT_PFX="build\certs\josephQuansah11.pfx"
+$env:SLIDESMITH_CERT_PASSWORD="slidesmith"
+npm run build:exe                      # signs as it builds
+npm run sign:exe                       # or sign an existing build/Slidesmith.exe
+```
+
+| Variable | Meaning |
+| --- | --- |
+| `SLIDESMITH_CERT_PFX` + `SLIDESMITH_CERT_PASSWORD` | a `.pfx`/`.p12` code-signing certificate |
+| `SLIDESMITH_CERT_SHA1` | thumbprint of a certificate in the user/machine store instead |
+| `SLIDESMITH_SIGNTOOL` | path to `signtool.exe` when it is not in the Windows Kits folders |
+| `SLIDESMITH_TIMESTAMP_URL` | RFC 3161 timestamp server (default DigiCert) |
+| `SLIDESMITH_SIGN_COMMAND` | your own signing command, with `{file}` for the path |
+| `SLIDESMITH_PUBLISHER` | the publisher name baked into the version resource (default `josephQuansah11`) |
+| `SLIDESMITH_REQUIRE_SIGNING=1` | fail the build instead of shipping an unsigned file |
+
+`sign-exe.mjs` uses `signtool.exe` when it can find it (Windows SDK / Visual Studio, or `SLIDESMITH_SIGNTOOL`) and
+falls back to PowerShell's `Set-AuthenticodeSignature`, which needs no SDK — but **cannot sign a single-file app this
+large**, so install the SDK signing tools for a real signed build. Either way the build verifies the signature
+afterwards and prints the publisher it ended up with.
+
+**What each option gets you**
+
+- **Self-signed certificate** (`npm run cert:new`) — the file is genuinely signed and Windows shows *josephQuansah11*
+  as the publisher, but the certificate chains to nothing Windows trusts, so Smart App Control will usually still
+  refuse it. Import it into *Trusted Root Certification Authorities* on the machines that should run it (that needs
+  administrator rights) and the chain becomes trusted.
+- **A certificate from a real authority** (DigiCert, Sectigo, SSL.com…) issued to `josephQuansah11` — the proper fix
+  for distribution: Smart App Control accepts it and SmartScreen warnings fade as the file earns reputation.
+- **Smart App Control switched off** (Settings → Privacy & security → Windows Security → App & browser control) —
+  works immediately, but it is a one-way switch on that PC: turning it back on needs a Windows reinstall.
+- **Running from source** — `npm run preview:app` uses your installed `node.exe`, which is already signed by the
+  Node.js Foundation, so Smart App Control allows it. Nothing to sign, nothing to trust.
+
 ### Notes for whoever receives the file
 
-- It is **unsigned**, so Windows SmartScreen may warn on first run: *More info* → *Run anyway*. Sign the
-  executable with your own certificate if you distribute it widely.
+- It ships **unsigned** unless you configured a certificate above, so Windows SmartScreen may warn on first run:
+  *More info* → *Run anyway*; Smart App Control refuses it outright until it is signed.
 - The file is large because it embeds the Node.js runtime — that is what removes the install step.
 - Builds are per platform: `npm run build:exe` produces a Windows `.exe` on Windows, a macOS binary on macOS
   and a Linux binary on Linux (Node's single-executable packaging cannot cross-compile).

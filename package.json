@@ -10,6 +10,8 @@
     "build:client": "vite build",
     "build:embed": "node scripts/embed-client.mjs",
     "build:exe": "npm run build:client && node scripts/embed-client.mjs && node scripts/build-exe.mjs",
+    "sign:exe": "node scripts/sign-exe.mjs build/Slidesmith.exe",
+    "cert:new": "node scripts/make-signing-cert.mjs",
     "preview:app": "npm run build:client && node scripts/embed-client.mjs && node server/standalone.js --no-open",
     "start": "node scripts/start-server.mjs",
     "smoke": "node scripts/smoke-test.mjs",
