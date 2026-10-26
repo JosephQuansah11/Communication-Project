@@ -164,21 +164,10 @@ function ShapeGeometry({ element, patch, onEditPoints, onToPath }) {
           onChange={(cornerRadius) => patch({ cornerRadius })}
         />
       )}
-      <div className="row-gap wrap">
-        <button type="button" className="wide-btn" onClick={() => onEditPoints?.()} title="Drag the points of this shape">
-          <Icon name="node" size={18} /> Edit points
-        </button>
-        {!isPath && (
-          <button type="button" className="wide-btn" onClick={() => onToPath?.()} title="Turn this shape into an editable path">
-            <Icon name="path" size={18} /> To path
-          </button>
-        )}
-      </div>
-      {isPath && (
-        <small className="field-hint">
-          {anchors} anchor{anchors === 1 ? '' : 's'} in {(element.path?.rings || []).length} ring
-          {(element.path?.rings || []).length === 1 ? '' : 's'} — double-click the outline to add one, Alt-click to remove one.
-        </small>
+      <small className="field-hint">
+        {anchors} anchor{anchors === 1 ? '' : 's'} in {(element.path?.rings || []).length} ring
+        {(element.path?.rings || []).length === 1 ? '' : 's'} — double-click the outline to add one, Alt-click to remove one.
+      </small>
       )}
     </>
   );
@@ -461,9 +450,6 @@ export default function Inspector({
           <div className="row-gap wrap">
             <button type="button" className="wide-btn" onClick={() => onMask?.()} title="Fill the shape with the picture">
               <Icon name="mask" size={17} /> Mask a picture
-            </button>
-            <button type="button" className="wide-btn" onClick={() => onEditPoints?.()} title="Drag the points of the lowest shape">
-              <Icon name="node" size={17} /> Edit points
             </button>
           </div>
           <small className="field-hint">
@@ -1017,22 +1003,6 @@ export default function Inspector({
           <SliderField label="Crop X" value={element.crop?.x || 0} min={-100} max={100} suffix="%" onChange={(value) => patch({ crop: { ...(element.crop || {}), x: value } })} />
           <SliderField label="Crop Y" value={element.crop?.y || 0} min={-100} max={100} suffix="%" onChange={(value) => patch({ crop: { ...(element.crop || {}), y: value } })} />
           <NumberField label="Corner radius" value={element.radius || 0} min={0} max={400} onChange={(radius) => patch({ radius })} suffix="px" />
-          {element.type === 'image' && (
-            <div className="row-gap wrap">
-              <button type="button" className="wide-btn" onClick={() => onEditPoints?.()} title="Turn this picture into a path and drag its outline">
-                <Icon name="node" size={18} /> Edit points
-              </button>
-              <button type="button" className="wide-btn" onClick={() => onToPath?.()} title="Convert the picture into an editable shape">
-                <Icon name="path" size={18} /> To path
-              </button>
-            </div>
-          )}
-          {element.type === 'image' && (
-            <small className="field-hint">
-              Edit points turns the picture into a shape filled with it, so any corner, curve or silhouette can be
-              dragged — the picture keeps its fit, and Combine paths can then fuse it with other shapes.
-            </small>
-          )}
           {element.type === 'video' && (
             <>
               <div className="field">

@@ -167,9 +167,7 @@ export const RIBBON_TABS = [
         label: 'Shape tools',
         items: [
           { id: 'penTool', label: 'Pen', icon: 'pen', size: 'large', toggle: true, title: 'Draw a custom shape point by point' },
-          { id: 'editPoints', label: 'Edit points', icon: 'node', size: 'large', toggle: true, title: 'Drag the anchors of the selected shape' },
-          { id: 'toPath', label: 'To path', icon: 'path', title: 'Turn this shape into an editable path' },
-          { id: 'cornerRadius', label: 'Corners', icon: 'corner', kind: 'custom', title: 'Round the corners of this shape' },
+                              { id: 'cornerRadius', label: 'Corners', icon: 'corner', kind: 'custom', title: 'Round the corners of this shape' },
           { id: 'shapeUnion', label: 'Union', icon: 'union', title: 'Merge the selected shapes into one' },
           { id: 'shapeSubtract', label: 'Subtract', icon: 'subtract', title: 'Cut the upper shapes out of the lowest one' },
           { id: 'shapeIntersect', label: 'Intersect', icon: 'intersect', title: 'Keep only where the shapes overlap' },

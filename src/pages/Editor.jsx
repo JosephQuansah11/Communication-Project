@@ -66,7 +66,7 @@ import {
 import { animationStepCount, normalizeAnimations } from '../../shared/animations.js';
 import { isOnlineVideo } from '../../shared/video.js';
 import { pastedImageFile, planPaste, readClipboard, writeClipboardText } from '../lib/clipboard.js';
-import { SHAPE_OP_LABELS, booleanMany, normalizePathShape, rectRings, ringsToPathShape, shapeRings } from '../lib/paths.js';
+import { SHAPE_OP_LABELS, booleanMany, rectRings, ringsToPathShape, shapeRings } from '../lib/paths.js';
 import {
   deckMatches as findDeckMatches,
   makeMatcher,
@@ -148,20 +148,8 @@ export default function Editor({ deckId, navigate }) {
     []
   );
   const [shapeMenu, setShapeMenu] = useState(false);
-  /** The canvas tool: 'select', the 'pen' or the 'nodes' point editor. */
+  /** The canvas tool: 'select' or the 'pen'. */
   const [tool, setTool] = useState('select');
-  /** The custom path whose anchors are being edited. */
-  const [nodeEditId, setNodeEditId] = useState(null);
-  /**
-   * Vector Edit: the object whose dots are on screen right now.
-   *
-   * Selecting a shape or a picture opens it, so the dots are there the moment an
-   * object is picked; Enter or Esc (or a click anywhere off the dots) locks the
-   * shape and hands the normal resize handles back.
-   */
-  const [pointEditId, setPointEditId] = useState(null);
-  /** What the automatic entry has already handled, and what the user locked. */
-  const pointEditRef = useRef({ auto: null, locked: null });
   const [tableTargetId, setTableTargetId] = useState(null);
   const [lightbox, setLightbox] = useState(null);
   const [presentOpen, setPresentOpen] = useState(false);
@@ -315,9 +303,6 @@ export default function Editor({ deckId, navigate }) {
    * group can still be dragged as a whole.
    */
   const selectElement = (id, { toggle = false } = {}) => {
-    // A new selection always opens Vector Edit again, so picking an object up after
-    // locking it shows its dots rather than remembering the old lock.
-    pointEditRef.current = { auto: null, locked: null };
     if (!id) return setSelectedIds([]);
     const members = expandGroups(slideElements, [id]);
     setSelectedIds((current) => {
@@ -996,23 +981,6 @@ export default function Editor({ deckId, navigate }) {
     },
     { separator: true },
     {
-      id: 'toPath',
-      label: 'Convert to path',
-      icon: 'path',
-      disabled:
-        !selectedElement ||
-        !['shape', 'image'].includes(selectedElement.type) ||
-        (selectedElement.type === 'shape' && selectedElement.shape === 'path'),
-      onSelect: () => convertToPath(),
-    },
-    {
-      id: 'editPoints',
-      label: 'Edit points',
-      icon: 'node',
-      disabled: !selectedElement || !['shape', 'image'].includes(selectedElement.type),
-      onSelect: toggleEditPoints,
-    },
-    {
       id: 'maskShape',
       label: 'Mask a picture',
       icon: 'mask',
@@ -1635,7 +1603,6 @@ export default function Editor({ deckId, navigate }) {
   const useTool = (next) => {
     const value = tool === next ? 'select' : next;
     setTool(value);
-    if (value !== 'nodes') setNodeEditId(null);
     if (value === 'pen') setEditingTextId(null);
   };
 
@@ -1655,150 +1622,6 @@ export default function Editor({ deckId, navigate }) {
     });
   };
 
-  /**
-   * A point edit. Dragging an anchor streams previews (the drag's own begin/end
-   * records one history step); adding or removing a point is a single action and
-   * records straight away.
-   */
-  /**
-   * Vector Edit opens by itself when a shape or a picture is picked — the dots are
-   * on the object the moment it is selected — and it stays open for that object
-   * until the user locks it with Enter, Esc or a click anywhere else.
-   */
-  useEffect(() => {
-    const element = selectedElements.length === 1 ? selectedElements[0] : null;
-    const state = pointEditRef.current;
-    if (!isEditablePath(element)) {
-      if (state.auto || pointEditId) {
-        pointEditRef.current = { auto: null, locked: null };
-        setPointEditId(null);
-      }
-      return;
-    }
-    if (element.id === state.auto) return;
-    if (state.locked === element.id) return;
-    pointEditRef.current = { auto: element.id, locked: null };
-    setPointEditId(element.id);
-  }, [selectedIds, slideElements]);
-
-  /**
-   * The dots only ever belong to the object that is selected right now.
-   *
-   * Anything that changes the selection — clicking another object, a marquee, a
-   * group, a slide switch — takes the dots with it, so the handles can never end up
-   * sitting on a different object from the one the selection box is around.
-   */
-  useEffect(() => {
-    if (pointEditId && pointEditId !== selectedId) setPointEditId(null);
-  }, [pointEditId, selectedId]);
-
-  /** Leaving the select tool always locks the shape. */
-  useEffect(() => {
-    if (tool !== 'select' && pointEditId) lockPointEdit();
-  }, [tool]);
-
-  /** A dot drag: previews while it moves, records when the drag ends. */
-  const patchPath = (id, rings, record = false) => patchElement(id || nodeEditId || selectedId, { path: { rings } }, record);
-
-  /** Corner dragging streams previews too; the drag's begin/end records the step. */
-  const patchCorners = (corners) => patchElement(selectedId, { corners }, false);
-
-  /**
-   * Turn a picture into a path shape so its outline can be dragged: the picture
-   * becomes the shape's fill, exactly like the mask command, and any clip shape it
-   * already had becomes the starting outline. Returns the new rings.
-   */
-  const convertImageToPath = (element) => {
-    const outline = {
-      type: 'shape',
-      shape: element.clipShape && element.clipShape !== 'none' ? element.clipShape : 'rect',
-      x: element.x,
-      y: element.y,
-      w: element.w,
-      h: element.h,
-      radius: element.radius || 0,
-    };
-    const fields = ringsToPathShape(shapeRings(outline));
-    patchElement(element.id, {
-      ...fields,
-      type: 'shape',
-      fill: 'transparent',
-      fillImage: { src: element.src, fit: element.fit || 'cover' },
-      name: element.name || 'Picture',
-      // The picture-only fields go, so the element is a clean shape from here on.
-      src: undefined,
-      fit: undefined,
-      clipShape: undefined,
-      crop: undefined,
-      expandable: undefined,
-      corners: null,
-      cornerRadius: 0,
-    });
-    return fields.path.rings;
-  };
-
-  /** Turn a preset shape into a path so its points can be dragged. Returns the rings. */
-  const convertToPath = (element = selectedElement) => {
-    if (!element) return null;
-    if (element.type === 'image') return convertImageToPath(element);
-    if (element.type !== 'shape' || element.shape === 'path') return null;
-    const fields = ringsToPathShape(shapeRings(element));
-    patchElement(element.id, { ...fields, fill: element.fill, fillImage: element.fillImage });
-    return fields.path.rings;
-  };
-
-  /**
-   * The rings a dot drag starts from. An element that is already a path keeps its
-   * own; anything else is converted once, here, so the dots can be grabbed on a
-   * plain rectangle, a preset shape or a picture — and the element only changes
-   * when the user actually moves one.
-   */
-  const ensurePath = (element) => {
-    if (!element) return [];
-    if (element.path?.rings?.length) return cloneRings(element.path.rings);
-    return convertToPath(element) || [];
-  };
-
-  const isEditablePath = (element) => Boolean(element) && (element.type === 'shape' || element.type === 'image');
-
-  /** Open Vector Edit on an object: dots on screen, resize handles off. */
-  const enterPointEdit = (id) => {
-    if (!id) return;
-    // An outline that lives outside its own box (some imported paths do) would put
-    // the dots nowhere near the object, so put it back in its box first.
-    const target = slideElements.find((item) => item.id === id);
-    const fixed = normalizePathShape(target);
-    if (fixed) patchElement(id, fixed, false);
-    pointEditRef.current = { auto: id, locked: null };
-    setPointEditId(id);
-  };
-
-  /**
-   * Lock the custom shape: the dots go, the selection stays, so the object can be
-   * moved and resized with the normal handles again. This is what Enter, Esc and a
-   * click anywhere off the dots all do.
-   */
-  const lockPointEdit = () => {
-    setPointEditId((current) => {
-      if (current) pointEditRef.current = { auto: current, locked: current };
-      return null;
-    });
-  };
-
-  /** The ribbon and inspector's Edit points: open the dots, or lock the shape. */
-  const toggleEditPoints = () => {
-    const element = selectedElement;
-    if (!isEditablePath(element)) {
-      setToast({ type: 'error', message: 'Select a shape or a picture first, then edit its points.' });
-      return;
-    }
-    if (pointEditId === element.id) return lockPointEdit();
-    enterPointEdit(element.id);
-    setToast({
-      type: 'info',
-      message: 'Vector edit: drag a square to move a point, a diamond to bend an edge, drag the outline to curve it, click the outline to add a point. Enter or Esc locks the shape.',
-    });
-  };
 
   /**
    * Boolean path operations. The shapes are flattened into polygons, combined and
@@ -2086,18 +1909,6 @@ export default function Editor({ deckId, navigate }) {
       /* Shape tools */
       case 'penTool':
         return useTool('pen');
-      case 'editPoints':
-        return toggleEditPoints();
-      case 'toPath':
-        return convertToPath();
-      case 'shapeUnion':
-        return combineShapes('union');
-      case 'shapeSubtract':
-        return combineShapes('subtract');
-      case 'shapeIntersect':
-        return combineShapes('intersect');
-      case 'shapeExclude':
-        return combineShapes('exclude');
       case 'maskShape':
         return maskWithShape();
 
@@ -2788,16 +2599,9 @@ export default function Editor({ deckId, navigate }) {
         target &&
         (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
       if (event.key === 'Escape') {
-        // Locking a custom shape comes before anything else, and keeps the object
-        // selected so it can be moved and resized again.
-        if (pointEditId) {
-          lockPointEdit();
-          return;
-        }
         // Leaving a shape tool comes before anything else.
         if (tool !== 'select') {
           setTool('select');
-          setNodeEditId(null);
           return;
         }
         if (findOpen) return setFindOpen(false);
@@ -2823,11 +2627,6 @@ export default function Editor({ deckId, navigate }) {
         return openFindPanel('replace');
       }
       if (typing) return;
-      // Enter opens or locks Vector Edit on the selected shape or picture.
-      if (event.key === 'Enter' && isEditablePath(selectedElement)) {
-        event.preventDefault();
-        return toggleEditPoints();
-      }
       // The pen and the point editor own the keyboard while they are active.
       if (tool !== 'select') return;
       if (mod && event.key.toLowerCase() === 'z') {
@@ -3005,7 +2804,6 @@ export default function Editor({ deckId, navigate }) {
           toggleTabs: panels.tabs,
           formatPainter: Boolean(formatClip),
           penTool: tool === 'pen',
-          editPoints: pointEditId === selectedId,
         }}
         disabled={{
           // Commands that need something selected, or two objects, say so up front.
@@ -3014,7 +2812,6 @@ export default function Editor({ deckId, navigate }) {
           delete: !selectedIds.length,
           groupShapes: selectedElements.length < 2,
           ungroupShapes: !hasGroup(slideElements, selectedIds),
-          toPath: !selectedElement || !['shape', 'image'].includes(selectedElement.type),
           cornerRadius: !selectedElement || selectedElement.type !== 'shape',
           shapeUnion: selectedElements.length < 2,
           shapeSubtract: selectedElements.length < 2,
@@ -3298,12 +3095,7 @@ export default function Editor({ deckId, navigate }) {
             onBegin={begin}
             onEnd={end}
             onOpenTable={openTable}
-            onExpand={(element) => {
-              // Double-clicking a shape or a picture opens Vector Edit on it, the
-              // way Figma does; a video or audio object opens in the lightbox.
-              if (isEditablePath(element)) return enterPointEdit(element.id);
-              setLightbox(element);
-            }}
+            onExpand={setLightbox}
             onDropFile={onDropFile}
             editingTextId={editingTextId}
             onStartTextEdit={(id) => {
@@ -3314,14 +3106,8 @@ export default function Editor({ deckId, navigate }) {
             onEndTextEdit={(options) => commitTextEdit(options)}
             onCreateText={createTextAt}
             tool={tool}
-            nodeEditId={nodeEditId}
-            pointEditId={pointEditId}
-            onExitPointEdit={lockPointEdit}
-            onEnsurePath={ensurePath}
             onToolChange={setTool}
             onCreatePath={createPathFromPen}
-            onPatchPath={patchPath}
-            onPatchCorners={patchCorners}
             textEditorRef={textEditorRef}
             animStep={animStep}
           />
@@ -3357,7 +3143,6 @@ export default function Editor({ deckId, navigate }) {
               toggleTabs: panels.tabs,
               formatPainter: Boolean(formatClip),
               penTool: tool === 'pen',
-              editPoints: pointEditId === selectedId,
             }}
             disabled={{
               paste: !selectedIds.length,
@@ -3365,7 +3150,6 @@ export default function Editor({ deckId, navigate }) {
               delete: !selectedIds.length,
               groupShapes: selectedElements.length < 2,
               ungroupShapes: !hasGroup(slideElements, selectedIds),
-              toPath: !selectedElement || !['shape', 'image'].includes(selectedElement.type),
               cornerRadius: !selectedElement || selectedElement.type !== 'shape',
               shapeUnion: selectedElements.length < 2,
               shapeSubtract: selectedElements.length < 2,
@@ -3393,8 +3177,6 @@ export default function Editor({ deckId, navigate }) {
           grouped={hasGroup(slideElements, selectedIds)}
           onCombine={combineShapes}
           onMask={maskWithShape}
-          onEditPoints={toggleEditPoints}
-          onToPath={() => convertToPath()}
           onPatchTextStyle={patchTextStyle}
           animations={slideAnimations}
           animStep={animStep}

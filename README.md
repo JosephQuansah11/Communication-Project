@@ -347,21 +347,12 @@ shape — a fill (or a picture fill), a border, text, rotation and animation all
 - **Pen tool.** *Insert ▸ Shape tools ▸ Pen* draws a shape point by point: click for a corner, click-and-drag to pull
   bezier handles out of the point, click the first dot again (or press Enter) to close it, Esc to throw it away and
   Backspace to drop the last point. A shape you leave open is drawn as a line.
-- **Vector Edit mode, the Figma way.** Selecting a shape or a picture opens it: the **orange dots sit on the object**
-  and the normal selection handles step aside. **Enter** or **Esc** (or a click anywhere off the dots) *locks* the
-  custom shape — the object stays selected and the resize handles come back — and **double-click** or **Enter** opens
-  the dots again.
-  - A **square** sits on every anchor (corner or curve point): drag it to stretch or skew the geometry.
-  - A **diamond** sits in the middle of every edge: drag it to bend that edge, the way an image editor's Bend tool
-    does; Alt-click it to straighten the edge again.
-  - The **outline itself** is a target: hover it for a **"+" cursor and click to drop a new anchor**, or **drag it**
-    to pull the edge out into a curve. Alt-click an anchor to remove it.
-  - A small round dot appears wherever a point already has curve handles, so the curve can be pulled.
-- **Nothing changes until you move a dot.** A rectangle stays a rectangle, a star stays a star and a picture stays a
-  picture while the dots are on screen; grabbing one converts that object into an editable path *once* — a picture
-  becomes a shape filled with the picture, so the photo survives the reshape — and the whole thing is a single undo
-  step. Corner rounding keeps its own controls (the inspector's per-corner grid and the ribbon's *Corners* field),
-  which come back on the canvas as the four little dots once the shape is locked.
+- **Shapes and pictures move, resize and rotate** — the familiar selection box with corner and edge handles, a rotate
+  handle and a live size read-out. A picture keeps its proportions when it is grown from a corner (Shift or Alt
+  stretches it freely), and its corner radius, clip shape, border and crop all come from the inspector.
+- **Editing a shape's outline is done through the inspector**, not on the canvas: pick a preset from *Shape*, set the
+  corner radius (or the per-corner grid), and use *Combine paths* to fuse shapes — with no editing dots drawn over
+  the object.
 - **Borders on pictures.** The image section of the inspector has a **Border** colour and a **Border width**, and the
   border follows the corner radius, so a picture can be outlined like any shape. Picking a colour turns a 2 px border
   on straight away, *Remove border* takes it off, and masking the picture into a shape keeps the border with it.
