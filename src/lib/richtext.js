@@ -368,6 +368,32 @@ export function applyWholeHtmlStyle(html, changes = {}) {
   return styleText ? `<span style="${escapeAttr(styleText)}">${inner}</span>` : inner;
 }
 
+/**
+ * Rewrite (or remove) one inline style property on **every** tag of an html
+ * fragment.
+ *
+ * This is what makes a box-level change visible: text imported from PowerPoint
+ * carries `font-family` (and often size/colour) inside its own spans, so setting
+ * the font of the whole box has to clear those inner values or the text keeps
+ * the font it came with.
+ */
+export function overrideInlineStyle(html, property, value) {
+  const name = String(property || '').toLowerCase();
+  if (!name) return String(html ?? '');
+  return String(html ?? '').replace(/\s*style="([^"]*)"/gi, (match, styleText) => {
+    const map = parseStyleMap(styleText);
+    if (!(name in map)) return match;
+    if (value) map[name] = value;
+    else delete map[name];
+    const cleaned = sanitizeStyle(
+      Object.entries(map)
+        .map(([prop, val]) => `${prop}: ${val}`)
+        .join('; ')
+    );
+    return cleaned ? ` style="${escapeAttr(cleaned)}"` : '';
+  });
+}
+
 /** True when a text box has nothing visible in it. */
 export function isBlankHtml(html) {
   return htmlToPlainText(html).length === 0;

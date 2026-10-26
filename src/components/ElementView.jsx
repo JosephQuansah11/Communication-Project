@@ -1,7 +1,8 @@
 import { useRef, useEffect, useState } from 'react';
 import Icon from './Icon.jsx';
 import TableGrid from './TableGrid.jsx';
-import { clipPathFor, pointsAttr, SHAPE_MAP } from '../lib/shapes.js';
+import { clipPathFor } from '../lib/shapes.js';
+import { ringsToD, shapeLocalRings } from '../lib/paths.js';
 import { normalizePictureFill, pictureFillCss, picturePatternLayout } from '../lib/backgrounds.js';
 import { fontStack } from '../lib/fonts.js';
 import { hasRichHtml, htmlToPlainText, sanitizeHtml, textElementHtml } from '../lib/richtext.js';
@@ -51,40 +52,46 @@ function pictureDef(picture, id) {
   );
 }
 
+/**
+ * The outline of a shape, drawn from its rings: a rectangle with an independent
+ * radius per corner, a preset polygon (optionally with rounded corners) or a
+ * custom path. `fillRule="evenodd"` is what turns a boolean result into a shape
+ * with real holes in it.
+ */
 export function ShapeArt({ element }) {
-  const { shape = 'rect', fill = '#6366f1', stroke, strokeWidth = 0, radius = 0, w, h, id } = element;
-  const safeId = String(id || 'shape').replace(/[^a-zA-Z0-9_-]/g, '');
+  const w = Math.max(1, Number(element.w) || 100);
+  const h = Math.max(1, Number(element.h) || 100);
+  const rings = shapeLocalRings(element);
+  const d = ringsToD(rings);
+  const open = rings.some((ring) => ring.closed === false);
+  const safeId = String(element.id || 'shape').replace(/[^a-zA-Z0-9_-]/g, '');
   const gradientId = `grad-${safeId}`;
   const pictureId = `pic-${safeId}`;
   const picture = normalizePictureFill(element.fillImage);
-  const gradient = picture ? null : gradientDefs(fill, gradientId);
+  const gradient = picture ? null : gradientDefs(element.fill, gradientId);
   const solid = picture
     ? `url(#${pictureId})`
     : gradient
       ? `url(#${gradientId})`
-      : fill === 'transparent'
+      : element.fill === 'transparent'
         ? 'none'
-        : fill;
-  const strokeProps = stroke
-    ? { stroke, strokeWidth: Math.max(0.5, strokeWidth || 1), vectorEffect: 'non-scaling-stroke', fill: 'none' }
+        : element.fill;
+  // An open path is a line, so it borrows the fill colour as its ink.
+  const ink = element.stroke || (open && element.fill !== 'transparent' ? element.fill : null);
+  const strokeProps = ink
+    ? { stroke: ink, strokeWidth: Math.max(0.5, Number(element.strokeWidth) || 1), vectorEffect: 'non-scaling-stroke' }
     : {};
-  const rx = radius ? (radius / Math.max(1, Math.min(w || 100, h || 100))) * 100 : 0;
-
-  let primitive;
-  if (shape === 'ellipse') {
-    primitive = <ellipse cx="50" cy="50" rx="50" ry="50" fill={solid} {...strokeProps} />;
-  } else if (shape === 'roundRect') {
-    primitive = <rect x="0" y="0" width="100" height="100" rx={Math.min(50, rx)} fill={solid} {...strokeProps} />;
-  } else if (shape === 'rect' || !SHAPE_MAP[shape]) {
-    primitive = <rect x="0" y="0" width="100" height="100" fill={solid} {...strokeProps} />;
-  } else {
-    primitive = <polygon points={pointsAttr(shape)} fill={solid} {...strokeProps} />;
-  }
 
   return (
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height="100%" style={{ display: 'block', pointerEvents: 'none' }}>
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      width="100%"
+      height="100%"
+      style={{ display: 'block', pointerEvents: 'none' }}
+    >
       {picture ? pictureDef(picture, pictureId) : gradient}
-      {primitive}
+      <path d={d} fill={open ? 'none' : solid} fillRule="evenodd" {...strokeProps} />
     </svg>
   );
 }

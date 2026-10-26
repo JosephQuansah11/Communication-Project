@@ -12,6 +12,7 @@ import AnnotationLayer, {
   strokeAt,
 } from '../components/AnnotationLayer.jsx';
 import { normalizeDeck } from '../lib/elements.js';
+import { createThrottle } from '../lib/throttle.js';
 import { animationStepCount, animationsForStep } from '../../shared/animations.js';
 import { fetchDeck, liveUrl, saveDeck, wsUrl } from '../lib/api.js';
 
@@ -235,17 +236,37 @@ export default function Presenter({ deckId, navigate }) {
     showChannel.current?.postMessage({ type: 'state', slideIndex: index, step, blank, fillMode, annotations, laser });
   }, [index, step, blank, fillMode, annotations, laser, isOutput]);
 
+  /**
+   * Sends over the live socket are throttled: a drawing stroke or a laser trail
+   * fires on every mouse move, and the audience does not need more than a dozen
+   * updates a second. The first message still goes out immediately.
+   */
+  const sendThrottled = useRef(null);
+  if (!sendThrottled.current) {
+    sendThrottled.current = createThrottle((payload) => {
+      const socket = wsRef.current;
+      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload));
+    }, 80);
+  }
+
+  /** A deck update carries the whole deck, so it goes out at most twice a second. */
+  const pushDeckUpdate = useRef(null);
+  if (!pushDeckUpdate.current) {
+    pushDeckUpdate.current = createThrottle((payload) => {
+      const socket = wsRef.current;
+      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload));
+    }, 500);
+  }
+
   /** Mirror blanking and drawings to the live audience over WebSocket. */
   useEffect(() => {
     if (isOutput || !live) return;
-    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ type: 'blank', blank }));
+    sendThrottled.current({ type: 'blank', blank });
   }, [blank, isOutput, live]);
 
   useEffect(() => {
     if (isOutput || !live) return;
-    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ type: 'annotation', slideIndex: index, strokes: annotations[index] || [] }));
+    sendThrottled.current({ type: 'annotation', slideIndex: index, strokes: annotations[index] || [] });
   }, [annotations, index, isOutput, live]);
 
   /**
@@ -371,7 +392,8 @@ export default function Presenter({ deckId, navigate }) {
           setDeck(normalized);
           setIndex((current) => Math.min(current, normalized.slides.length - 1));
           if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'deck:update', deck: normalized }));
+            // A whole deck per file change is heavy: at most one every half second.
+            pushDeckUpdate.current({ type: 'deck:update', deck: normalized });
           }
         }
       } catch {

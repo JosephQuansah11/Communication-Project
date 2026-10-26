@@ -10,6 +10,7 @@ import { spawn } from 'node:child_process';
 import os from 'node:os';
 import { importPptx, ImportError, isLegacyOfficeBuffer, isZipBuffer } from './pptx.js';
 import { createDemoDeck } from './demo.js';
+import { detectServerPlatform, openCommand, platformLabel } from '../shared/platform.js';
 
 const __dirname = moduleDir();
 const ROOT = path.resolve(__dirname, '..');
@@ -187,6 +188,8 @@ function requireWhich(bin) {
 }
 
 const LO_BIN = hasLibreOffice();
+/** Set once the packaged app starts logging to its data folder. */
+let loggingStarted = false;
 
 async function convertLegacy(buffer, originalName) {
   if (!LO_BIN) {
@@ -202,6 +205,8 @@ async function convertLegacy(buffer, originalName) {
   await new Promise((resolve, reject) => {
     const proc = spawn(LO_BIN, ['--headless', '--norestore', '--convert-to', 'pptx', '--outdir', tempDir, input], {
       stdio: 'ignore',
+      // LibreOffice must not flash a console window while converting.
+      windowsHide: true,
     });
     proc.on('error', reject);
     proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`LibreOffice exited with code ${code}`))));
@@ -358,14 +363,59 @@ function newCode() {
 }
 
 function send(ws, payload) {
-  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+  if (ws?.readyState === WebSocket.OPEN) ws.send(typeof payload === 'string' ? payload : JSON.stringify(payload));
 }
 
+/**
+ * Send one payload to everyone in a session.
+ *
+ * The payload is serialised **once** — a deck update to twenty viewers used to
+ * mean twenty `JSON.stringify` calls of the same (possibly large) object.
+ */
 function broadcast(session, payload, exclude = null) {
+  const text = typeof payload === 'string' ? payload : JSON.stringify(payload);
   for (const client of session.clients) {
     if (client === exclude) continue;
-    send(client, payload);
+    send(client, text);
   }
+  return text;
+}
+
+/**
+ * High-frequency messages (a laser pointer, a drawing stroke) arrive hundreds of
+ * times a second. Each session keeps only the newest one and flushes it on a
+ * short timer, so the audience still sees every movement but the server does a
+ * fraction of the work.
+ */
+function coalesceFor(session, kind, intervalMs) {
+  session.coalescers = session.coalescers || new Map();
+  let entry = session.coalescers.get(kind);
+  if (entry) return entry.push;
+  entry = {};
+  const push = (payload) => {
+    entry.payload = payload;
+    if (entry.timer) return;
+    entry.timer = setTimeout(() => {
+      entry.timer = null;
+      const pending = entry.payload;
+      entry.payload = null;
+      if (pending) broadcast(session, pending);
+    }, intervalMs);
+    entry.timer.unref?.();
+  };
+  entry.push = push;
+  session.coalescers.set(kind, entry);
+  return push;
+}
+
+/** Stop the coalescing timers of a session that is going away. */
+function stopCoalescers(session) {
+  for (const entry of session.coalescers?.values() || []) {
+    if (entry.timer) clearTimeout(entry.timer);
+    entry.timer = null;
+    entry.payload = null;
+  }
+  session.coalescers?.clear();
 }
 
 function viewersPayload(session) {
@@ -437,7 +487,10 @@ export function attachLiveServer(server) {
         if (!message.deck || !Array.isArray(message.deck.slides)) {
           return send(ws, { type: 'error', error: 'A deck is required to host.' });
         }
-        if (ws.sessionCode && sessions.has(ws.sessionCode)) sessions.delete(ws.sessionCode);
+        if (ws.sessionCode && sessions.has(ws.sessionCode)) {
+          stopCoalescers(sessions.get(ws.sessionCode));
+          sessions.delete(ws.sessionCode);
+        }
         const code = newCode();
         const session = {
           code,
@@ -447,6 +500,10 @@ export function attachLiveServer(server) {
           host: ws,
           createdAt: Date.now(),
           ended: false,
+          /** Newest high-frequency payloads waiting to be flushed. */
+          coalescers: new Map(),
+          /** The last deck payload that went out, so identical ones are skipped. */
+          lastDeckPayload: null,
         };
         sessions.set(code, session);
         ws.role = 'host';
@@ -495,7 +552,13 @@ export function attachLiveServer(server) {
             if (message.deck && Array.isArray(message.deck.slides)) {
               session.deck = message.deck;
               session.slideIndex = Math.max(0, Math.min(message.deck.slides.length - 1, session.slideIndex));
-              broadcast(session, { type: 'deck', deck: message.deck, slideIndex: session.slideIndex });
+              const payload = { type: 'deck', deck: message.deck, slideIndex: session.slideIndex };
+              // A whole deck is expensive to send; only do it when it changed.
+              const text = JSON.stringify(payload);
+              if (text !== session.lastDeckPayload) {
+                session.lastDeckPayload = text;
+                broadcast(session, text);
+              }
             }
             break;
           }
@@ -510,7 +573,8 @@ export function attachLiveServer(server) {
             break;
           }
           case 'pointer': {
-            broadcast(session, { type: 'pointer', x: Number(message.x), y: Number(message.y), name: ws.name }, ws);
+            // The laser pointer moves constantly: keep only the newest position.
+            coalesceFor(session, 'pointer', 40)({ type: 'pointer', x: Number(message.x), y: Number(message.y), name: ws.name });
             break;
           }
           case 'blank': {
@@ -524,13 +588,19 @@ export function attachLiveServer(server) {
             const slideIndex = Math.max(0, Number(message.slideIndex) || 0);
             const strokes = Array.isArray(message.strokes) ? message.strokes : [];
             session.annotations = { ...(session.annotations || {}), [slideIndex]: strokes };
-            broadcast(session, { type: 'annotation', slideIndex, strokes }, ws);
+            // A stroke arrives with every mouse move; 20 a second is plenty.
+            coalesceFor(session, 'annotation', 50)({ type: 'annotation', slideIndex, strokes });
             break;
           }
           case 'presenting': {
             session.slideIndex = Math.max(0, Number(message.slideIndex) || 0);
             session.deck = message.deck || session.deck;
-            broadcast(session, { type: 'deck', deck: session.deck, slideIndex: session.slideIndex }, ws);
+            const payload = { type: 'deck', deck: session.deck, slideIndex: session.slideIndex };
+            const text = JSON.stringify(payload);
+            if (text !== session.lastDeckPayload) {
+              session.lastDeckPayload = text;
+              broadcast(session, text);
+            }
             break;
           }
           case 'end': {
@@ -539,6 +609,7 @@ export function attachLiveServer(server) {
             for (const client of session.clients) {
               if (client.readyState === WebSocket.OPEN) client.close(1000, 'Session ended');
             }
+            stopCoalescers(session);
             sessions.delete(session.code);
             send(ws, { type: 'ended' });
             break;
@@ -570,6 +641,7 @@ export function attachLiveServer(server) {
         for (const client of session.clients) {
           if (client.readyState === WebSocket.OPEN) client.close(1000, 'Presenter left');
         }
+        stopCoalescers(session);
         sessions.delete(session.code);
       } else {
         session.clients.delete(ws);
@@ -654,25 +726,23 @@ function findChromiumBrowser() {
   return null;
 }
 
-/** Open the app in a window without browser chrome, falling back to the default browser. */
+/**
+ * Open the app in a window without browser chrome, falling back to the default
+ * browser. The platform rules live in `shared/platform.js`; every child process
+ * is started hidden so no console window ever pops up beside the app.
+ */
 function openBrowser(url) {
   if (hasFlag('no-open') || process.env.SLIDESMITH_NO_OPEN === '1') return;
-  const launch = (command, args) => {
-    const child = spawn(command, args, { detached: true, stdio: 'ignore' });
+  const launch = ({ command, args }) => {
+    const child = spawn(command, args, { detached: true, stdio: 'ignore', windowsHide: true });
     child.on('error', () => {});
     child.unref();
   };
   try {
-    const chromium = findChromiumBrowser();
-    if (chromium) {
-      launch(chromium, [`--app=${url}`, '--new-window', '--window-size=1440,900']);
-      return;
-    }
-    if (process.platform === 'win32') launch('cmd', ['/c', 'start', '', url]);
-    else if (process.platform === 'darwin') launch('open', [url]);
-    else launch('xdg-open', [url]);
+    const platform = detectServerPlatform(process.platform);
+    launch(openCommand(platform, url, findChromiumBrowser()));
   } catch {
-    /* the URL is printed in the console either way */
+    /* the URL is logged either way */
   }
 }
 
@@ -730,6 +800,38 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: error?.message || 'Unexpected server error.' });
 });
 
+/**
+ * Keep a log file for the packaged app, whose console window is hidden: every
+ * console line is appended to `SlidesmithData/slidesmith.log` (trimmed when it
+ * grows), so a user can still send something useful when something goes wrong.
+ */
+function startFileLogging() {
+  if (loggingStarted) return;
+  loggingStarted = true;
+  const file = path.join(DATA_DIR, 'slidesmith.log');
+  const write = (level, args) => {
+    try {
+      const line = `${new Date().toISOString()} ${level} ${args
+        .map((value) => (value instanceof Error ? value.stack || value.message : typeof value === 'string' ? value : JSON.stringify(value)))
+        .join(' ')}\n`;
+      fs.appendFile(file, line).catch(() => {});
+    } catch {
+      /* logging must never break the app */
+    }
+  };
+  for (const level of ['log', 'warn', 'error']) {
+    const original = console[level].bind(console);
+    console[level] = (...args) => {
+      write(level.toUpperCase(), args);
+      original(...args);
+    };
+  }
+  // Keep the file from growing without bound.
+  fs.stat(file)
+    .then((info) => (info.size > 512 * 1024 ? fs.rm(file, { force: true }) : null))
+    .catch(() => {});
+}
+
 async function start() {
   await ensureStorage();
 
@@ -762,17 +864,28 @@ async function start() {
   attachLiveServer(server);
 
   const url = `http://localhost:${PORT}`;
-  console.log('');
-  console.log('  ==============================================');
-  console.log('    Slidesmith Studio');
-  console.log('  ==============================================');
-  console.log(`   Open in your browser:  ${url}`);
-  console.log(`   Live audience socket:  ws://localhost:${PORT}/ws`);
-  console.log(`   Decks & uploads:       ${DATA_DIR}`);
-  console.log(`   Legacy .ppt converter: ${LO_BIN ? LO_BIN : 'not installed (export as .pptx)'}`);
-  console.log('');
-  console.log('   Keep this window open while you work. Close it to stop the app.');
-  console.log('');
+  const platform = detectServerPlatform(process.platform);
+  // In the packaged app the console window is hidden, so everything worth knowing
+  // also goes to a log file next to the decks.
+  if (STANDALONE) startFileLogging();
+
+  const lines = [
+    '',
+    '  ==============================================',
+    '    Slidesmith Studio',
+    '  ==============================================',
+    `   System:                ${platformLabel(platform)} (${process.platform} ${process.arch})`,
+    `   Open in your browser:  ${url}`,
+    `   Live audience socket:  ws://localhost:${PORT}/ws`,
+    `   Decks & uploads:       ${DATA_DIR}`,
+    `   Legacy .ppt converter: ${LO_BIN ? LO_BIN : 'not installed (export as .pptx)'}`,
+    '',
+    STANDALONE
+      ? '   The app is running in its own window. Close the window to stop it.'
+      : '   Keep this window open while you work. Close it to stop the app.',
+    '',
+  ];
+  for (const line of lines) console.log(line);
 
   if (STANDALONE) openBrowser(url);
 
@@ -788,3 +901,4 @@ start().catch((error) => {
   console.error('Failed to start Slidesmith Studio', error);
   process.exit(1);
 });
+

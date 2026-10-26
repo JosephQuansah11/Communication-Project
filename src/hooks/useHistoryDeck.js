@@ -7,6 +7,17 @@ export function useHistoryDeck(initial) {
   const future = useRef([]);
   const transaction = useRef(null);
   const [historyVersion, setHistoryVersion] = useState(0);
+  /**
+   * A counter that changes whenever the deck changes. Comparing it is free,
+   * whereas serialising the whole deck to see whether it changed is not — that
+   * used to happen on every pointer move of a drag.
+   */
+  const [revision, setRevision] = useState(0);
+  const revisionRef = useRef(0);
+  const bump = useCallback(() => {
+    revisionRef.current += 1;
+    setRevision(revisionRef.current);
+  }, []);
 
   const apply = useCallback((updater, record = true) => {
     const previous = deckRef.current;
@@ -25,8 +36,9 @@ export function useHistoryDeck(initial) {
     }
     deckRef.current = next;
     setDeckState(next);
+    bump();
     return next;
-  }, []);
+  }, [bump]);
 
   const preview = useCallback((updater) => apply(updater, false), [apply]);
 
@@ -53,7 +65,8 @@ export function useHistoryDeck(initial) {
     deckRef.current = previous;
     setDeckState(previous);
     setHistoryVersion((value) => value + 1);
-  }, []);
+    bump();
+  }, [bump]);
 
   const redo = useCallback(() => {
     const next = future.current.pop();
@@ -62,7 +75,8 @@ export function useHistoryDeck(initial) {
     deckRef.current = next;
     setDeckState(next);
     setHistoryVersion((value) => value + 1);
-  }, []);
+    bump();
+  }, [bump]);
 
   const reset = useCallback((next) => {
     deckRef.current = next;
@@ -71,7 +85,8 @@ export function useHistoryDeck(initial) {
     future.current = [];
     transaction.current = null;
     setHistoryVersion((value) => value + 1);
-  }, []);
+    bump();
+  }, [bump]);
 
   return {
     deck,
@@ -86,5 +101,7 @@ export function useHistoryDeck(initial) {
     canUndo: past.current.length > 0,
     canRedo: future.current.length > 0,
     historyVersion,
+    revision,
   };
 }
+

@@ -3397,6 +3397,292 @@ input[type="range"]::-webkit-slider-thumb {
   .editor-shell.rail-hidden .editor-main,
   .editor-shell.inspector-hidden .editor-main,
   .editor-shell.rail-hidden.inspector-hidden .editor-main { grid-template-columns: 1fr; }
+/* ------------------------------------------------------------------ *
+ * Find & replace
+ * ------------------------------------------------------------------ */
+
+.find-panel {
+  position: fixed;
+  top: 104px;
+  right: 26px;
+  z-index: 310;
+  width: min(560px, calc(100vw - 52px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: rgba(9, 14, 28, 0.97);
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.7);
+  backdrop-filter: blur(14px);
+}
+
+.find-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.find-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 11px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: rgba(2, 6, 23, 0.6);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.find-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.28);
+}
+
+.find-count {
+  flex: 0 0 auto;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.find-step {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(15, 23, 42, 0.7);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.find-step:hover:not(:disabled) {
+  border-color: #6366f1;
+  color: #fff;
+}
+
+.find-step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.find-options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.find-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.find-options small {
+  flex: 1 1 100%;
+  opacity: 0.8;
+}
+
+.ribbon-find-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ribbon-find-btn:hover {
+  background: rgba(99, 102, 241, 0.24);
+  color: #fff;
+}
+
+.wide-btn.primary {
+  background: #4f46e5;
+  border-color: #6366f1;
+  color: #fff;
+}
+
+.wide-btn.primary:hover:not(:disabled) {
+  background: #6366f1;
+}
+
+/* ------------------------------------------------------------------ *
+ * Shape tools: corner widgets, the point editor and the pen
+ * ------------------------------------------------------------------ */
+
+/* A little dot near each corner of a rectangle — drag it to round that corner. */
+.corner-widget {
+  position: absolute;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1.5px solid #0ea5e9;
+  box-shadow: 0 1px 3px rgba(2, 6, 23, 0.4);
+  cursor: crosshair;
+  z-index: 7;
+}
+
+.corner-widget:hover {
+  background: #e0f2fe;
+  transform: scale(1.15);
+}
+
+/* The point editor: anchors are squares, bezier handles are round. */
+.node-editor {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  z-index: 8;
+}
+
+.node-editor .node-outline {
+  stroke: #f97316;
+  stroke-dasharray: 5 3;
+  pointer-events: none;
+}
+
+.node-editor .node-hit {
+  pointer-events: stroke;
+  cursor: copy;
+}
+
+.node-editor .node-handle-line {
+  stroke: #0ea5e9;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.node-editor .node-handle {
+  fill: #fdba74;
+  stroke: #f97316;
+  stroke-width: 1.5;
+  cursor: move;
+  pointer-events: all;
+}
+
+.node-editor .node-anchor {
+  fill: #f97316;
+  stroke: #ffffff;
+  stroke-width: 1.5;
+  cursor: move;
+  pointer-events: all;
+}
+
+.node-editor .node-anchor:hover,
+.node-editor .node-handle:hover {
+  fill: #fed7aa;
+  stroke: #c2410c;
+}
+
+.node-editor .node-bend {
+  fill: #fb923c;
+  stroke: #ffffff;
+  stroke-width: 1.5;
+  cursor: move;
+  pointer-events: all;
+}
+
+.node-editor .node-bend.curved {
+  fill: #ea580c;
+}
+
+.node-editor .node-bend:hover {
+  fill: #fdba74;
+  stroke: #c2410c;
+}
+
+.canvas-element.editing-nodes {
+  cursor: default;
+}
+
+/* The pen's work in progress. */
+.pen-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.pen-layer .pen-outline {
+  stroke: #0ea5e9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pen-layer .pen-handle-line {
+  stroke: #0ea5e9;
+  opacity: 0.6;
+}
+
+.pen-layer .pen-anchor {
+  fill: #ffffff;
+  stroke: #0284c7;
+  stroke-width: 1.5;
+}
+
+.pen-layer .pen-anchor.first {
+  fill: #0ea5e9;
+  stroke: #ffffff;
+}
+
+/* A hint that follows the active tool. */
+.canvas-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.86);
+  border: 1px solid var(--line-strong);
+  color: #e2e8f0;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 9;
+}
+
+.shape-ops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.shape-ops .seg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.corner-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+
 }
 
 
@@ -3598,4 +3884,6 @@ input[type="range"]::-webkit-slider-thumb {
   white-space: nowrap;
   font-size: 14.5px;
 }
+
+
 

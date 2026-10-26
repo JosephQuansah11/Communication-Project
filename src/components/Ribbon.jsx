@@ -23,10 +23,17 @@ export default function Ribbon({
   quick,
   right,
   fileLabel = 'File',
+  /** 'windows' | 'mac' | 'linux' | …: makes the shortcut hints match the machine. */
+  platform = 'other',
 }) {
   const [fileOpen, setFileOpen] = useState(false);
   const fileRef = useRef(null);
   const tab = ribbonTab(activeTab);
+  /** Tooltips are written with Ctrl; show the key this machine actually has. */
+  const hint = (text) =>
+    platform === 'mac' || platform === 'ios'
+      ? String(text).replace(/\bCtrl\/Cmd\b|\bCtrl\b|\bCmd\b/g, '⌘').replace(/\s*\+\s*/g, '')
+      : String(text).replace(/\bCtrl\/Cmd\b/g, 'Ctrl');
 
   const drawItem = (item, options = {}) => {
     const custom = renderItem?.(item);
@@ -40,7 +47,7 @@ export default function Ribbon({
         className={`ribbon-item ${large ? 'large' : 'small'}${state[item.id] ? ' on' : ''}${item.danger ? ' danger' : ''}${
           options.menu ? ' menu-item' : ''
         }`}
-        title={item.title || item.label}
+        title={hint(item.title || item.label)}
         aria-pressed={item.toggle ? Boolean(state[item.id]) : undefined}
         disabled={Boolean(disabled[item.id])}
         onClick={() => {

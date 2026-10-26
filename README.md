@@ -167,6 +167,10 @@ The inspector shows a **system** badge and the editor footer shows the active fo
 
 ### Text boxes & rich formatting
 - **Double-click anywhere on the canvas** to drop a text box at that point and start typing immediately.
+- **Changing the font of a box always shows.** Imported text carries its own `font-family` (and often size and colour)
+  inside the spans PowerPoint wrote; setting the family, size or colour of the box now clears those inner values
+  first, so the new font actually renders instead of being hidden behind the text's own formatting. The same is true
+  for imported `runs`, whose per-run font is dropped when the whole box is restyled.
 - While a box is open for editing, its whole rectangle belongs to the editor: clicking the text, the padding or
   the empty space inside it keeps the session alive, so you can select, retype, restyle and reposition the caret
   freely. Only a click **outside** the box commits and closes it.
@@ -269,6 +273,86 @@ The inspector shows a **system** badge and the editor footer shows the active fo
 - Select an image and use **Set this picture as the slide background** to paint it edge-to-edge behind the slide.
 - Images keep cover/contain fit, border, radius and opacity controls.
 
+### Custom shapes: corners, the pen and path operations
+Everything here works on the shapes you draw and on the ones that arrive in a deck, and the result is still a plain
+shape — a fill (or a picture fill), a border, text, rotation and animation all keep working.
+- **A radius per corner.** A rectangle carries four independent radii. Drag the dots on the shape itself, or type
+  the values in the inspector (top-left · top-right · bottom-right · bottom-left). Radii that would overlap are
+  scaled down together the way CSS does, so a corner can never fold over itself, and *Radius (all)* — or the
+  ribbon's **Corners** field — sets all four at once. Preset polygons (star, arrow, hexagon…) and custom paths have
+  a single **Corner radius** that cuts their sharp corners off.
+- **Path operations.** Select two or more shapes (pictures count as their own rectangle) and press **Union**,
+  **Subtract**, **Intersect** or **Exclude** — in the ribbon's *Shape tools* group, in the inspector's *Combine
+  paths* panel, or from the right-click menu. The lowest shape is the base for Subtract and lends the result its
+  fill, border and picture fill; the shapes are replaced by one editable path in the same stacking position, and
+  every operation is one undo step.
+- **Pen tool.** *Insert ▸ Shape tools ▸ Pen* draws a shape point by point: click for a corner, click-and-drag to pull
+  bezier handles out of the point, click the first dot again (or press Enter) to close it, Esc to throw it away and
+  Backspace to drop the last point. A shape you leave open is drawn as a line.
+- **The edit dots are always there.** Selecting a shape or a picture puts **orange dots straight on top of it** — no
+  mode to enter: a **square** on every anchor (corner or curve point), a **diamond** in the middle of every edge, and
+  a small round dot wherever a point already has curve handles. Drag a square to move that point, a diamond to bend
+  that edge (the curve follows the pointer exactly, like an image editor's Bend tool), double-click the outline to
+  add a point and Alt-click one to remove it or straighten a bent edge. *Edit points* in the ribbon simply shows or
+  hides the dots.
+- **Nothing changes until you move a dot.** A rectangle stays a rectangle, a star stays a star and a picture stays a
+  picture while the dots are on screen; grabbing one converts that object into an editable path *once* — a picture
+  becomes a shape filled with the picture, so the photo survives the reshape — and the whole thing is a single undo
+  step. Corner rounding keeps its own controls (the inspector's per-corner grid and the ribbon's *Corners* field),
+  which come back on the canvas as the four little dots when the edit dots are hidden.
+- **Edit points** (ribbon, inspector or right-click) shows or hides the dots for the selected object.
+- **Pictures are shapes too.** Selecting a picture and pressing **Edit points** (ribbon, inspector or right-click)
+  turns it into a shape *filled* with the picture — a rectangle by default, or the clip shape it already had — so its
+  corners, curves and silhouette can be dragged like any other outline. The picture keeps its fit, and once it is a
+  path it can be Unioned, Subtracted or Intersected with other shapes just the same.
+- **Bend an edge.** Every edge of a path carries a diamond in its middle: drag it and that edge curves through the
+  pointer (the Snipping-Tool "Bend" move), Alt-click it to straighten the edge again. Works on shapes, on drawn
+  paths and on pictures, because a picture being reshaped *is* a path here.
+- **Drop pictures onto pictures.** Drag an image file from anywhere — the file manager, the browser, a screenshot —
+  and drop it on empty canvas to place it, or **straight onto a picture or a picture-filled shape to replace what it
+  shows**, keeping the size, crop, border and rotation of the object you dropped on. Multi-file drops place each
+  file in turn.
+- **Masking a picture.** With a picture and a shape selected, **Mask a picture** pours the picture into the shape's
+  exact outline — the Figma "use as mask" move. Combine it with the path operations to build an outline (a number, a
+  letter, any silhouette) and then fill it with a photo; the picture stays a picture fill, so it survives resizing,
+  rotating and animating.
+- All of the geometry lives in `src/lib/paths.js` — rings with bezier handles, CSS-style corner clamping, corner
+  rounding, flattening and a real polygon clipper (edge splitting, collinear-overlap handling, straightest-continuation
+  ring building) — and is unit tested against measured areas in `tests/paths.test.js`.
+
+### Find & replace across the deck
+- **Ctrl+H** (or *Home ▸ Editing ▸ Replace*) opens the panel; **Ctrl+F** focuses the find field in the ribbon.
+  The search runs over **every slide at once**, and the count tells you how far it reaches:
+  “6 in 5 objects on 2 slides”.
+- Everything you wrote is covered: text boxes, shape text, **table cells** and the **speaker notes** of every slide.
+  Formulas (`=A1+B1`) are deliberately left alone.
+- **Enter** jumps to the next match — opening its slide and selecting the object it lives in (Shift+Enter goes back,
+  and a match in the notes says so). **Replace** rewrites the object the find is standing on; **Replace all**
+  rewrites the whole deck in one undo step, and the deck is saved straight away.
+- **Match case** and **Whole words** are one click away, the query is taken literally (`(net)`, `a.b` and `%` are not
+  patterns), and rich text keeps its formatting: the replacement goes into the text of the HTML, never into a tag or
+  an attribute, and entities are decoded for the match and re-encoded after it. Imported `runs` are rewritten too,
+  keeping each run's own formatting.
+
+### Performance & the operating system
+- **Drags are coalesced to one update per frame.** Pointer moves arrive far faster than the screen can show them
+  (a 500 Hz mouse means 500 renders a second); the newest position is applied once per animation frame instead.
+  Measured on a 24-slide / 288-object deck with 200 moves: **1097 ms → 444 ms** of main-thread work for the same
+  drag. The pen, node, bend, corner and marquee drags all go through the same path.
+- **Saving does not serialise the deck on every change.** A revision counter decides whether a save is needed, and
+  the deck is only stringified once per save. The word count and the search index are computed when the deck
+  settles, not on every keystroke.
+- **The live socket coalesces.** A drawing stroke used to be sent on every mouse move, and the server serialised the
+  payload once *per viewer*; now payloads are serialised once for everyone, strokes and the laser pointer are
+  coalesced to ~20 a second, and a deck update is skipped when the deck has not actually changed.
+- **The app knows which OS it is on** (`shared/platform.js`): the launcher opens the user's browser the way that
+  system expects (app window when Chrome/Edge is found, `open` on macOS, `xdg-open` elsewhere), shortcut hints read
+  `⌘S` on a Mac and `Ctrl+S` everywhere else (Tools ▸ System shows what was detected), and the startup log names the
+  system and architecture.
+- **No terminal window beside the app.** Every child process is spawned hidden, and the packaged executable is
+  patched to the Windows **GUI subsystem** (`build:exe` prints `subsystem 3 -> 2`), so double-clicking it opens only
+  the app. Its console output is mirrored to `SlidesmithData/data/slidesmith.log` instead.
+
 ### Online videos
 - **Insert ▸ Online video** takes a YouTube or Vimeo link and drops it on the slide at 16:9. Pasting a video link
   anywhere on the canvas does the same thing, and a link that arrives in an imported deck is already a video.
@@ -283,6 +367,8 @@ The inspector shows a **system** badge and the editor footer shows the active fo
 - **Reorder slides by dragging**: grab any thumbnail in the rail and drop it anywhere in the list (a drop line shows
   exactly where it will land), or use the ↑ / ↓ buttons on a thumbnail. Slides dropped inside a section join that
   section, so sections survive reordering.
+- **Zoom with Ctrl/Cmd + wheel** anywhere over the canvas (25%–300%), or use the zoom buttons under the slide and
+  *View ▸ Zoom*. A plain wheel still scrolls the canvas, the way you would expect.
 - Multi-slide rail with thumbnails, add/duplicate/delete, plus named sections you can collapse.
 - **Right-click menus.** Right-click an object for cut/copy/paste, duplicate, delete, z-order and group; right-click
   empty canvas for paste, select-all, a new text box, a picture, a table or an online video; right-click inside a

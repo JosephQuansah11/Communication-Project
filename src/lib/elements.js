@@ -2,6 +2,7 @@ import { htmlToPlainText, sanitizeHtml } from './richtext.js';
 import { normalizeAnimations } from '../../shared/animations.js';
 import { normalizePictureFill } from './backgrounds.js';
 import { onlineVideoLabel, parseOnlineVideo } from '../../shared/video.js';
+import { ringsToPathShape } from './paths.js';
 
 export const uid = (prefix = 'el') =>
   `${prefix}-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 12) : Math.random().toString(36).slice(2, 14)}`;
@@ -96,11 +97,22 @@ export function createShape(shape = 'rect', overrides = {}) {
     stroke: null,
     strokeWidth: 0,
     radius: shape === 'roundRect' ? 24 : 0,
+    /** Per-corner radii, in the order Figma shows them (tl, tr, br, bl). */
+    corners: null,
+    /** One radius for every corner of a polygon or a custom path. */
+    cornerRadius: 0,
+    /** Custom geometry: `{ rings: [{ points: [{ x, y, in?, out? }], closed }] }`. */
+    path: null,
     text: '',
     html: null,
     style: { ...DEFAULT_STYLE, fontSize: 24, color: '#ffffff', align: 'center', valign: 'middle' },
     ...overrides,
   };
+}
+
+/** A custom-path shape from rings already in slide coordinates. */
+export function createPathShape(rings, overrides = {}) {
+  return createShape('path', { fill: '#6366f1', ...ringsToPathShape(rings), ...overrides });
 }
 
 export function createImage(src, overrides = {}) {

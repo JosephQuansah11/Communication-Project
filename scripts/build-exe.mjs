@@ -133,6 +133,44 @@ if (process.platform === 'darwin') {
   }
 }
 
+/**
+ * Turn a console executable into a GUI one by flipping the PE subsystem field.
+ *
+ * A Node Single Executable Application is a copy of `node.exe`, which is a
+ * console program: double-clicking it opens a black terminal window beside the
+ * app. Windows only cares about one field in the PE optional header, so setting
+ * it to `IMAGE_SUBSYSTEM_WINDOWS_GUI` (2) makes the app start silently — the
+ * server still runs, it just has no console. (Logging goes to a file instead.)
+ */
+function setGuiSubsystem(file) {
+  const buffer = fs.readFileSync(file);
+  const peOffset = buffer.readUInt32LE(0x3c);
+  if (buffer.toString('ascii', peOffset, peOffset + 4) !== 'PE\0\0') {
+    throw new Error('not a PE executable');
+  }
+  const optionalHeader = peOffset + 24;
+  // PE32 and PE32+ both keep Subsystem at optional header + 0x44 (the 64-bit
+  // ImageBase is wider, BaseOfData is gone — the field lands in the same place).
+  const subsystemOffset = optionalHeader + 0x44;
+  const current = buffer.readUInt16LE(subsystemOffset);
+  if (current === 2) return { changed: false, from: current };
+  buffer.writeUInt16LE(2, subsystemOffset);
+  fs.writeFileSync(file, buffer);
+  return { changed: true, from: current };
+}
+
+// The app must not open a console window beside itself: turn the copied runtime
+// into a GUI executable (Windows only — other platforms have no such thing).
+if (process.platform === 'win32') {
+  step('Making the executable a windowed app (no console)');
+  try {
+    const { changed, from } = setGuiSubsystem(exePath);
+    console.log(changed ? `   subsystem ${from} -> 2 (GUI): double-clicking opens no terminal` : '   already a GUI executable');
+  } catch (error) {
+    console.warn(`   skipped: ${error.message}`);
+  }
+}
+
 const sizeMb = (fs.statSync(exePath).size / (1024 * 1024)).toFixed(1);
 console.log('');
 console.log('  ==============================================');

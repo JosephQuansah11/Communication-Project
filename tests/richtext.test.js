@@ -5,6 +5,7 @@ import {
   hasRichHtml,
   htmlToPlainText,
   isBlankHtml,
+  overrideInlineStyle,
   plainTextToHtml,
   runsToHtml,
   sanitizeHtml,
@@ -105,6 +106,42 @@ test('textElementHtml prefers html, then runs, then text', () => {
   assert.equal(textElementHtml({ html: '<h1>Styled</h1>', text: 'Styled' }), '<h1>Styled</h1>');
   assert.equal(textElementHtml({ runs: [{ text: 'run' }], text: 'run' }), 'run');
   assert.equal(textElementHtml({ text: 'plain & simple' }), 'plain &amp; simple');
+});
+
+test('an inline style is overridden or cleared on every tag', () => {
+  const html = '<span style="font-family: Georgia; color: #111">A</span> <b style="font-family: Times">B</b> plain';
+  // Clearing: the box-level font must win, so the inner families go.
+  assert.equal(
+    overrideInlineStyle(html, 'font-family', ''),
+    '<span style="color: #111">A</span> <b>B</b> plain'
+  );
+  // Setting: every tag gets the new value.
+  assert.equal(
+    overrideInlineStyle(html, 'font-family', 'Courier New'),
+    '<span style="font-family: Courier New; color: #111">A</span> <b style="font-family: Courier New">B</b> plain'
+  );
+  // Tags that do not carry the property are left exactly as they were.
+  assert.equal(overrideInlineStyle(html, 'font-size', ''), html);
+  // Nothing to do for an unknown property or empty html.
+  assert.equal(overrideInlineStyle(html, '', 'x'), html);
+  assert.equal(overrideInlineStyle('', 'font-family', 'x'), '');
+  assert.equal(overrideInlineStyle(null, 'font-family', 'x'), '');
+  // Unsafe values never survive the round trip.
+  assert.equal(overrideInlineStyle('<span style="color: #111">A</span>', 'color', 'url(evil)'), '<span>A</span>');
+});
+
+test('a box-level font change replaces what the text carried', () => {
+  const element = {
+    text: 'Styled run',
+    html: '<span style="font-family: Georgia">Styled run</span>',
+    style: { fontFamily: 'Georgia', fontSize: 24 },
+  };
+  const cleaned = applyWholeHtmlStyle(overrideInlineStyle(textElementHtml(element), 'font-family', ''), {
+    fontFamily: 'Courier New',
+  });
+  assert.ok(!cleaned.includes('Georgia'), cleaned);
+  assert.ok(cleaned.includes('font-family: Courier New'), cleaned);
+  assert.ok(cleaned.includes('Styled run'), 'the words are untouched');
 });
 
 test('box-level formatting wraps, toggles and unwraps', () => {
@@ -216,4 +253,5 @@ test('normalizeDeck keeps rich text and gradient backgrounds', () => {
   assert.equal(BACKGROUND_DEFAULT.gradient, null);
   assert.equal(backgroundStyles(slide.background).layer.backgroundColor, '#0b1120');
 });
+
 

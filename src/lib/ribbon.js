@@ -127,7 +127,8 @@ export const RIBBON_TABS = [
         id: 'editing',
         label: 'Editing',
         items: [
-          { id: 'find', label: 'Find', icon: 'search', kind: 'custom', title: 'Find text on this slide' },
+          { id: 'find', label: 'Find', icon: 'search', kind: 'custom', title: 'Find text in every slide (Ctrl+F)' },
+          { id: 'replace', label: 'Replace', icon: 'replace', kind: 'custom', title: 'Find and replace across the deck (Ctrl+H)' },
           { id: 'selectAll', label: 'Select all', icon: 'marquee', title: 'Select every object on this slide (Ctrl+A)' },
           { id: 'selectTop', label: 'Select', icon: 'pointer', title: 'Select the topmost object' },
           { id: 'selectNone', label: 'Deselect', icon: 'close', title: 'Clear the selection' },
@@ -159,6 +160,21 @@ export const RIBBON_TABS = [
           { id: 'media', label: 'Media', icon: 'video', size: 'large' },
           { id: 'onlineVideo', label: 'Online video', icon: 'link', size: 'large', title: 'Embed a YouTube or Vimeo link' },
           { id: 'table', label: 'Table', icon: 'table', size: 'large' },
+        ],
+      },
+      {
+        id: 'shapetools',
+        label: 'Shape tools',
+        items: [
+          { id: 'penTool', label: 'Pen', icon: 'pen', size: 'large', toggle: true, title: 'Draw a custom shape point by point' },
+          { id: 'editPoints', label: 'Edit points', icon: 'node', size: 'large', toggle: true, title: 'Drag the anchors of the selected shape' },
+          { id: 'toPath', label: 'To path', icon: 'path', title: 'Turn this shape into an editable path' },
+          { id: 'cornerRadius', label: 'Corners', icon: 'corner', kind: 'custom', title: 'Round the corners of this shape' },
+          { id: 'shapeUnion', label: 'Union', icon: 'union', title: 'Merge the selected shapes into one' },
+          { id: 'shapeSubtract', label: 'Subtract', icon: 'subtract', title: 'Cut the upper shapes out of the lowest one' },
+          { id: 'shapeIntersect', label: 'Intersect', icon: 'intersect', title: 'Keep only where the shapes overlap' },
+          { id: 'shapeExclude', label: 'Exclude', icon: 'exclude', title: 'Keep everything except the overlap' },
+          { id: 'maskShape', label: 'Mask', icon: 'mask', title: 'Fill the selected shape with the selected picture' },
         ],
       },
       {
@@ -301,7 +317,8 @@ export const RIBBON_TABS = [
         items: [
           { id: 'deckStats', label: 'Deck', icon: 'grid', kind: 'custom' },
           { id: 'wordCount', label: 'Words', icon: 'body', kind: 'custom' },
-          { id: 'find', label: 'Find', icon: 'search', kind: 'custom', title: 'Find text on this slide' },
+          { id: 'find', label: 'Find', icon: 'search', kind: 'custom', title: 'Find text in every slide (Ctrl+F)' },
+          { id: 'replace', label: 'Replace', icon: 'replace', kind: 'custom', title: 'Find and replace across the deck (Ctrl+H)' },
         ],
       },
       {
@@ -360,6 +377,7 @@ export const RIBBON_TABS = [
           { id: 'mediaViewer', label: 'Media viewer', icon: 'image', size: 'large', title: 'Open the selected image, video or audio' },
           { id: 'shortcuts', label: 'Shortcuts', icon: 'info', size: 'large', title: 'Keyboard shortcuts' },
           { id: 'fontsInfo', label: 'Font source', icon: 'font', title: 'Where the font list comes from' },
+          { id: 'systemInfo', label: 'System', icon: 'monitor', kind: 'custom', title: 'The operating system this app is running on' },
         ],
       },
       {
@@ -377,20 +395,22 @@ export const RIBBON_TABS = [
 
 /** Keyboard shortcuts shown by Tools ▸ Shortcuts. */
 export const KEYBOARD_SHORTCUTS = [
-  ['Ctrl/Cmd + Z', 'Undo'],
-  ['Ctrl/Cmd + Shift + Z', 'Redo'],
-  ['Ctrl/Cmd + C', 'Copy the selection (its text goes to the clipboard too)'],
-  ['Ctrl/Cmd + X', 'Cut the selection'],
-  ['Ctrl/Cmd + V', 'Paste objects, text or a picture'],
+  ['Mod+Z', 'Undo'],
+  ['Mod+Shift+Z', 'Redo'],
+  ['Mod+C', 'Copy the selection (its text goes to the clipboard too)'],
+  ['Mod+X', 'Cut the selection'],
+  ['Mod+V', 'Paste objects, text or a picture'],
   ['Right-click', 'Object, text and slide menus — including Paste'],
-  ['Ctrl/Cmd + D', 'Duplicate every selected object'],
-  ['Ctrl/Cmd + A', 'Select every object on the slide'],
-  ['Ctrl/Cmd + G', 'Group the selected objects'],
-  ['Ctrl/Cmd + Shift + G', 'Break the selected group apart'],
+  ['Mod+D', 'Duplicate every selected object'],
+  ['Mod+A', 'Select every object on the slide'],
+  ['Mod+G', 'Group the selected objects'],
+  ['Mod+Shift+G', 'Break the selected group apart'],
   ['Tab / Shift + Tab', 'Select the next / previous object'],
   ['Shift or Ctrl + click', 'Add an object to the selection, or take it out'],
   ['Drag on empty space', 'Marquee-select everything inside the box'],
-  ['Ctrl/Cmd + S', 'Save now'],
+  ['Mod+S', 'Save now'],
+  ['Mod+F', 'Find text in every slide'],
+  ['Mod+H', 'Find and replace across the deck'],
   ['Delete', 'Delete the selection'],
   ['Arrow keys', 'Nudge 1 px (10 px with Shift)'],
   ['PageUp / PageDown', 'Previous / next slide'],
@@ -424,3 +444,4 @@ export function tabsForItem(id) {
     tab.groups.some((group) => group.items.some((item) => item.id === id))
   ).map((tab) => tab.id);
 }
+

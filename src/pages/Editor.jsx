@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../components/Icon.jsx';
 import EditorCanvas from '../components/EditorCanvas.jsx';
 import Inspector from '../components/Inspector.jsx';
@@ -8,6 +8,7 @@ import MediaLightbox from '../components/MediaLightbox.jsx';
 import PresentDialog from '../components/PresentDialog.jsx';
 import Ribbon from '../components/Ribbon.jsx';
 import ContextMenu from '../components/ContextMenu.jsx';
+import FindReplacePanel from '../components/FindReplacePanel.jsx';
 import DocumentTabs from '../components/DocumentTabs.jsx';
 import Popover from '../components/Popover.jsx';
 import { useHistoryDeck } from '../hooks/useHistoryDeck.js';
@@ -17,6 +18,7 @@ import { useSystemFonts } from '../lib/fonts.js';
 import {
   createAudio,
   createImage,
+  createPathShape,
   createShape,
   createSlide,
   createTable,
@@ -35,7 +37,16 @@ import { SHAPES } from '../lib/shapes.js';
 import { BACKGROUND_PRESETS, gradientCss, similarBackgroundFor } from '../lib/backgrounds.js';
 import { SLIDE_LAYOUTS, applySlideLayout } from '../lib/layouts.js';
 import { KEYBOARD_SHORTCUTS } from '../lib/ribbon.js';
-import { applyWholeHtmlStyle, htmlToPlainText, isBlankHtml, plainTextToHtml, sanitizeHtml, textElementHtml } from '../lib/richtext.js';
+import { detectClientPlatform, modifierKey, platformLabel, shortcutLabel } from '../../shared/platform.js';
+import {
+  applyWholeHtmlStyle,
+  htmlToPlainText,
+  isBlankHtml,
+  overrideInlineStyle,
+  plainTextToHtml,
+  sanitizeHtml,
+  textElementHtml,
+} from '../lib/richtext.js';
 import {
   alignOffsets,
   boundsOf,
@@ -54,6 +65,14 @@ import {
 import { animationStepCount, normalizeAnimations } from '../../shared/animations.js';
 import { isOnlineVideo } from '../../shared/video.js';
 import { pastedImageFile, planPaste, readClipboard, writeClipboardText } from '../lib/clipboard.js';
+import { SHAPE_OP_LABELS, booleanMany, rectRings, ringsToPathShape, shapeRings } from '../lib/paths.js';
+import {
+  deckMatches as findDeckMatches,
+  makeMatcher,
+  replaceDeck,
+  replaceInElement,
+  replaceText,
+} from '../lib/findreplace.js';
 
 /**
  * A ribbon button with a dropdown. The menu is drawn through `Popover`, so it
@@ -114,7 +133,26 @@ export default function Editor({ deckId, navigate }) {
   const [editingTextId, setEditingTextId] = useState(null);
   const [slideId, setSlideId] = useState(null);
   const [zoom, setZoom] = useState(1);
+  /**
+   * The operating system this window is running on. It decides how shortcuts are
+   * written, which the user notices immediately.
+   */
+  const platform = useMemo(
+    () =>
+      detectClientPlatform({
+        userAgentData: globalThis.navigator?.userAgentData,
+        platform: globalThis.navigator?.platform,
+        userAgent: globalThis.navigator?.userAgent,
+      }),
+    []
+  );
   const [shapeMenu, setShapeMenu] = useState(false);
+  /** The canvas tool: 'select', the 'pen' or the 'nodes' point editor. */
+  const [tool, setTool] = useState('select');
+  /** The custom path whose anchors are being edited. */
+  const [nodeEditId, setNodeEditId] = useState(null);
+  /** The edit dots sit on the selected object unless the user hides them. */
+  const [showPoints, setShowPoints] = useState(true);
   const [tableTargetId, setTableTargetId] = useState(null);
   const [lightbox, setLightbox] = useState(null);
   const [presentOpen, setPresentOpen] = useState(false);
@@ -126,6 +164,14 @@ export default function Editor({ deckId, navigate }) {
   const [panels, setPanels] = useState({ rail: true, inspector: true, tabs: true });
   const [formatClip, setFormatClip] = useState(null);
   const [findQuery, setFindQuery] = useState('');
+  /** Find & replace: the panel, the replacement and how it matches. */
+  const [findOpen, setFindOpen] = useState(false);
+  const [replaceQuery, setReplaceQuery] = useState('');
+  const [findCase, setFindCase] = useState(false);
+  const [findWord, setFindWord] = useState(false);
+  const [findCursor, setFindCursor] = useState(0);
+  const findInputRef = useRef(null);
+  const replaceInputRef = useRef(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [ribbonMenu, setRibbonMenu] = useState(null);
   /** The right-click menu: { x, y, items } or null. */
@@ -137,7 +183,7 @@ export default function Editor({ deckId, navigate }) {
   const [dropIndex, setDropIndex] = useState(null);
   const documentTabs = useDocumentTabs();
   const workspace = useWorkspaceBackground();
-  const { deck, deckRef, apply, preview, begin, end, undo, redo, reset, canUndo, canRedo } = useHistoryDeck(null);
+  const { deck, deckRef, apply, preview, begin, end, undo, redo, reset, canUndo, canRedo, revision } = useHistoryDeck(null);
   const mediaInput = useRef(null);
   const importInput = useRef(null);
   const pictureInput = useRef(null);
@@ -146,6 +192,8 @@ export default function Editor({ deckId, navigate }) {
   const saveTimer = useRef(null);
   const channel = useRef(null);
   const lastSaved = useRef('');
+  /** The revision that has been written to the server, so saves can be skipped. */
+  const lastSavedRevision = useRef(0);
   const textEditorRef = useRef(null);
   const freshTextRef = useRef(null);
   const animTimer = useRef(null);
@@ -186,21 +234,31 @@ export default function Editor({ deckId, navigate }) {
 
   useEffect(() => {
     if (!deck) return undefined;
-    const serialized = JSON.stringify(deck);
-    if (serialized === lastSaved.current) return undefined;
+    // The revision counter is free to compare; serialising the deck on every
+    // change (every pointer move of a drag) was not.
+    if (revision === lastSavedRevision.current) return undefined;
     setSaveState('saving');
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      saveDeck(deck)
+      const saving = deckRef.current;
+      const serialized = JSON.stringify(saving);
+      if (serialized === lastSaved.current) {
+        lastSavedRevision.current = revision;
+        setSaveState('saved');
+        return;
+      }
+      saveDeck(saving)
         .then(({ deck: saved }) => {
-          lastSaved.current = JSON.stringify(deck);
+          lastSaved.current = serialized;
+          lastSavedRevision.current = revision;
           setSaveState('saved');
           channel.current?.postMessage({ type: 'deck-updated', updatedAt: saved.updatedAt });
         })
         .catch(() => setSaveState('error'));
     }, 700);
     return () => clearTimeout(saveTimer.current);
-  }, [deck]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revision, Boolean(deck)]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -233,12 +291,21 @@ export default function Editor({ deckId, navigate }) {
   /** Replace the selection with one object (the form used all over the editor). */
   const setSelectedId = (id) => setSelectedIds(id ? expandGroups(slideElements, [id]) : []);
   /** Select one object, add it to the selection, or take it out again. */
+  /**
+   * Select one object (and the whole group it belongs to).
+   *
+   * A plain click replaces the selection — clicking a second object must not keep
+   * the first one selected; Shift/Ctrl+click toggles it in or out. The canvas
+   * already skips this call when the clicked object is part of the selection, so a
+   * group can still be dragged as a whole.
+   */
   const selectElement = (id, { toggle = false } = {}) => {
     if (!id) return setSelectedIds([]);
     const members = expandGroups(slideElements, [id]);
     setSelectedIds((current) => {
+      if (!toggle) return members;
       const next = new Set(current);
-      if (toggle && members.every((member) => next.has(member))) members.forEach((member) => next.delete(member));
+      if (members.every((member) => next.has(member))) members.forEach((member) => next.delete(member));
       else members.forEach((member) => next.add(member));
       return slideElements.filter((element) => next.has(element.id)).map((element) => element.id);
     });
@@ -358,10 +425,32 @@ export default function Editor({ deckId, navigate }) {
     if (next.subscript) next.superscript = false;
     const inlineKeys = ['bold', 'italic', 'underline', 'highlight', 'superscript', 'subscript'];
     const touchesInline = inlineKeys.some((key) => next[key] !== undefined);
+    /**
+     * A box-level family, size or colour has to win over the values the text
+     * carries inside itself — imported runs bring their own `font-family`, and
+     * without clearing those the new font would never show.
+     */
+    const boxOverrides = [
+      ['fontFamily', 'font-family'],
+      ['fontSize', 'font-size'],
+      ['color', 'color'],
+    ].filter(([key]) => next[key] !== undefined);
     const map = {};
     for (const element of targets) {
       const payload = { style: { ...(element.style || {}), ...next } };
-      if (touchesInline) payload.html = applyWholeHtmlStyle(textElementHtml(element), next) || null;
+      let html = textElementHtml(element);
+      if (boxOverrides.length) {
+        for (const [, property] of boxOverrides) html = overrideInlineStyle(html, property, '');
+        // Runs keep their own fonts too, so clear the ones being replaced.
+        if (element.runs?.length) {
+          payload.runs = element.runs.map((run) => {
+            const copy = { ...run };
+            for (const [key] of boxOverrides) delete copy[key];
+            return copy;
+          });
+        }
+      }
+      if (touchesInline || boxOverrides.length) payload.html = applyWholeHtmlStyle(html, next) || null;
       map[element.id] = payload;
     }
     patchElements(map);
@@ -582,10 +671,54 @@ export default function Editor({ deckId, navigate }) {
     setToast({ type: 'success', message: `${isAudio ? 'Audio' : isVideo ? 'Video' : 'Image'} added to the slide.` });
   };
 
-  const onDropFile = (file, point) => {
+  /** The topmost object under a slide point — the drop target of a dragged file. */
+  const elementAtPoint = (point) => {
+    const list = slide?.elements || [];
+    for (let index = list.length - 1; index >= 0; index -= 1) {
+      const element = list[index];
+      if (
+        point.x >= element.x &&
+        point.x <= element.x + element.w &&
+        point.y >= element.y &&
+        point.y <= element.y + element.h
+      ) {
+        return element;
+      }
+    }
+    return null;
+  };
+
+  /**
+   * Drop a picture **onto** a picture or a picture-filled shape to replace what
+   * it shows — the quickest way to swap an image without touching the layout.
+   * Anything else (or an empty spot) adds a new object, as before.
+   */
+  const replacePictureWith = async (element, file) => {
+    const asset = await upload(file);
+    if (!asset) return false;
+    if (element.type === 'image') {
+      patchElement(element.id, { src: asset.url, name: asset.name || file.name, fit: element.fit || 'cover' });
+      setToast({ type: 'success', message: 'Picture replaced — size, crop and borders kept.' });
+      return true;
+    }
+    patchElement(element.id, {
+      fillImage: { ...(element.fillImage || {}), src: asset.url, fit: element.fillImage?.fit || 'cover' },
+      fill: 'transparent',
+    });
+    setToast({ type: 'success', message: 'The shape now shows the dropped picture.' });
+    return true;
+  };
+
+  const onDropFile = async (file, point) => {
+    const isImage = /^image\//.test(file.type) || /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(file.name);
+    const target = point ? elementAtPoint(point) : null;
+    const canReplace = target && (target.type === 'image' || (target.type === 'shape' && target.fillImage));
+    if (isImage && canReplace) {
+      if (await replacePictureWith(target, file)) return;
+    }
     if (
       /^image\/|^video\/|^audio\//.test(file.type) ||
-      /\.(png|jpe?g|gif|webp|svg|mp4|webm|mov|mp3|wav|m4a|ogg)$/i.test(file.name)
+      /\.(png|jpe?g|gif|webp|svg|avif|bmp|mp4|webm|mov|mp3|wav|m4a|ogg)$/i.test(file.name)
     ) {
       insertMedia(file, point);
     } else {
@@ -814,6 +947,60 @@ export default function Editor({ deckId, navigate }) {
     },
     { separator: true },
     { id: 'selectAll', label: 'Select all objects', icon: 'marquee', shortcut: 'Ctrl+A', onSelect: selectAllElements },
+    { separator: true },
+    {
+      id: 'combineUnion',
+      label: 'Union',
+      icon: 'union',
+      disabled: selectedElements.length < 2,
+      onSelect: () => combineShapes('union'),
+    },
+    {
+      id: 'combineSubtract',
+      label: 'Subtract',
+      icon: 'subtract',
+      disabled: selectedElements.length < 2,
+      onSelect: () => combineShapes('subtract'),
+    },
+    {
+      id: 'combineIntersect',
+      label: 'Intersect',
+      icon: 'intersect',
+      disabled: selectedElements.length < 2,
+      onSelect: () => combineShapes('intersect'),
+    },
+    {
+      id: 'combineExclude',
+      label: 'Exclude',
+      icon: 'exclude',
+      disabled: selectedElements.length < 2,
+      onSelect: () => combineShapes('exclude'),
+    },
+    { separator: true },
+    {
+      id: 'toPath',
+      label: 'Convert to path',
+      icon: 'path',
+      disabled:
+        !selectedElement ||
+        !['shape', 'image'].includes(selectedElement.type) ||
+        (selectedElement.type === 'shape' && selectedElement.shape === 'path'),
+      onSelect: () => convertToPath(),
+    },
+    {
+      id: 'editPoints',
+      label: 'Edit points',
+      icon: 'node',
+      disabled: !selectedElement || !['shape', 'image'].includes(selectedElement.type),
+      onSelect: toggleEditPoints,
+    },
+    {
+      id: 'maskShape',
+      label: 'Mask a picture',
+      icon: 'mask',
+      disabled: selectedElements.length < 2,
+      onSelect: maskWithShape,
+    },
   ];
 
   const slideMenuItems = (point) => [
@@ -833,15 +1020,39 @@ export default function Editor({ deckId, navigate }) {
     { id: 'onlineVideo', label: 'Online video…', icon: 'link', onSelect: addOnlineVideo },
   ];
 
+  /**
+   * Right-click menus.
+   *
+   * The menu is built on the *next* render, after the right-click's selection
+   * change has been applied: commands like Duplicate or Delete read the current
+   * selection, so building the items here would hand them the previous one.
+   */
   const openContextMenu = ({ event, element, point }) => {
     const editing = Boolean(element) && element.id === editingTextId;
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
       label: editing ? 'Text menu' : element ? 'Object menu' : 'Slide menu',
-      items: editing ? textMenuItems() : element ? objectMenuItems(point) : slideMenuItems(point),
+      items: [],
+      pending: { element, point, editing },
     });
   };
+
+  useLayoutEffect(() => {
+    const pending = contextMenu?.pending;
+    if (!pending) return;
+    setContextMenu((current) => {
+      if (!current?.pending) return current;
+      const { element, point, editing } = current.pending;
+      return {
+        ...current,
+        pending: null,
+        items: editing ? textMenuItems() : element ? objectMenuItems(point) : slideMenuItems(point),
+      };
+    });
+    // The menu items only depend on the pending request and the selection it changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextMenu]);
 
   const openTable = (element) => {
     begin();
@@ -1080,8 +1291,20 @@ export default function Editor({ deckId, navigate }) {
   };
 
   const toggleFullScreen = () => {
-    if (document.fullscreenElement) document.exitFullscreen?.();
-    else document.documentElement.requestFullscreen?.();
+    // Both calls return a promise that rejects when the browser refuses (an
+    // embedded frame, a lost gesture) — say so instead of leaving it unhandled.
+    const done = (action) => {
+      try {
+        const result = action?.();
+        if (result?.catch) {
+          result.catch(() => setToast({ type: 'info', message: 'This window will not go full screen — try F5 in a browser tab.' }));
+        }
+      } catch {
+        setToast({ type: 'info', message: 'This window will not go full screen — try F5 in a browser tab.' });
+      }
+    };
+    if (document.fullscreenElement) done(() => document.exitFullscreen?.());
+    else done(() => document.documentElement.requestFullscreen?.());
   };
 
   const importFile = async (file) => {
@@ -1267,30 +1490,108 @@ export default function Editor({ deckId, navigate }) {
     });
   };
 
-  const findMatches = useMemo(() => {
-    const query = findQuery.trim().toLowerCase();
-    if (!query || !slide) return [];
-    return slide.elements.filter((element) =>
-      [element.text, element.name, element.src, element.type]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [findQuery, slide]);
+  const findOptions = useMemo(() => ({ matchCase: findCase, wholeWord: findWord }), [findCase, findWord]);
+
+  /** Every match in the deck — slide by slide, object by object, notes included. */
+  const findMatches = useMemo(() => findDeckMatches(deck, findQuery, findOptions), [deck, findQuery, findOptions]);
+
+  const findTotals = useMemo(() => {
+    const occurrences = findMatches.reduce((total, match) => total + match.count, 0);
+    const slides = new Set(findMatches.map((match) => match.slideIndex)).size;
+    return { occurrences, slides, objects: findMatches.length };
+  }, [findMatches]);
+
+  const openFindPanel = (focus = 'find') => {
+    setFindOpen(true);
+    window.setTimeout(() => (focus === 'replace' ? replaceInputRef.current : findInputRef.current)?.focus(), 0);
+  };
+
+  /** Jump to a match: open its slide and select the object it lives in. */
+  const goToMatch = (direction = 1) => {
+    if (!findMatches.length) {
+      if (findQuery) setToast({ type: 'info', message: `No matches for “${findQuery}” in this deck.` });
+      return;
+    }
+    const next = (findCursor + direction + findMatches.length * 2) % findMatches.length;
+    setFindCursor(next);
+    const match = findMatches[next];
+    commitTextEdit();
+    if (match.slideId !== slideId) setSlideId(match.slideId);
+    if (match.elementId) setSelectedId(match.elementId);
+    else {
+      setSelectedId(null);
+      setToast({ type: 'info', message: 'Match in the speaker notes of this slide.' });
+    }
+  };
+
+  /** Replace every occurrence in the object the find is standing on. */
+  const replaceCurrent = () => {
+    const matcher = makeMatcher(findQuery, findOptions);
+    const match = findMatches[Math.min(findCursor, findMatches.length - 1)];
+    if (!matcher || !match) return;
+    commitTextEdit();
+    apply((current) => ({
+      ...current,
+      slides: current.slides.map((item, index) => {
+        if (index !== match.slideIndex) return item;
+        if (!match.elementId) return { ...item, notes: replaceText(item.notes, matcher, replaceQuery) };
+        return {
+          ...item,
+          elements: item.elements.map((element) => {
+            if (element.id !== match.elementId) return element;
+            const result = replaceInElement(element, matcher, replaceQuery);
+            return result ? result.element : element;
+          }),
+        };
+      }),
+    }));
+    setToast({ type: 'success', message: `Replaced ${match.count} in this ${match.where}.` });
+  };
+
+  /** Replace every occurrence in every slide, notes and tables included. */
+  const replaceAll = () => {
+    if (!deck || !findQuery) return;
+    const result = replaceDeck(deck, findQuery, replaceQuery, findOptions);
+    if (!result.count) {
+      setToast({ type: 'info', message: `Nothing to replace for “${findQuery}”.` });
+      return;
+    }
+    commitTextEdit();
+    apply(result.deck);
+    setFindCursor(0);
+    setSelectedId(null);
+    setEditingTextId(null);
+    setToast({
+      type: 'success',
+      message: `Replaced ${result.count} occurrence${result.count === 1 ? '' : 's'} across ${
+        result.slides
+      } slide${result.slides === 1 ? '' : 's'}.`,
+    });
+  };
+
+  /**
+   * The word count walks every object of every slide, so it is computed once the
+   * deck has settled rather than on every keystroke or drag frame.
+   */
+  const [statsDeck, setStatsDeck] = useState(null);
+  useEffect(() => {
+    const timer = setTimeout(() => setStatsDeck(deckRef.current), 500);
+    return () => clearTimeout(timer);
+  }, [revision]);
 
   const deckStats = useMemo(() => {
-    if (!deck) return { slides: 0, objects: 0, words: 0 };
+    const source = statsDeck;
+    if (!source) return { slides: 0, objects: 0, words: 0 };
     let objects = 0;
     let words = 0;
-    for (const item of deck.slides) {
+    for (const item of source.slides) {
       objects += item.elements.length;
       for (const element of item.elements) {
         if (element.text) words += element.text.split(/\s+/).filter(Boolean).length;
       }
     }
-    return { slides: deck.slides.length, objects, words };
-  }, [deck]);
+    return { slides: source.slides.length, objects, words };
+  }, [statsDeck]);
 
   /* ---------------------------------------------------------------- *
    * Ribbon plumbing
@@ -1306,6 +1607,200 @@ export default function Editor({ deckId, navigate }) {
         fill: '#6366f1',
       })
     );
+  };
+
+  /* ---------------------------------------------------------------- *
+   * Shape tools: the pen, boolean paths, masking and corner rounding
+   * ---------------------------------------------------------------- */
+
+  /** Switch the canvas tool, keeping the ribbon, the hints and the canvas in step. */
+  const useTool = (next) => {
+    const value = tool === next ? 'select' : next;
+    setTool(value);
+    if (value !== 'nodes') setNodeEditId(null);
+    if (value === 'pen') setEditingTextId(null);
+  };
+
+  /** The pen finished: turn its anchors into a custom-path shape. */
+  const createPathFromPen = (rings) => {
+    const closed = rings[0]?.closed !== false;
+    const element = createPathShape(rings, {
+      fill: closed ? '#6366f1' : 'transparent',
+      stroke: closed ? null : '#6366f1',
+      strokeWidth: closed ? 0 : 4,
+      name: 'Custom shape',
+    });
+    addElement(element);
+    setToast({
+      type: 'success',
+      message: closed ? 'Custom shape drawn — edit its points any time.' : 'Line drawn — give it a border colour to restyle it.',
+    });
+  };
+
+  /**
+   * A point edit. Dragging an anchor streams previews (the drag's own begin/end
+   * records one history step); adding or removing a point is a single action and
+   * records straight away.
+   */
+  /** A dot drag: previews while it moves, records when the drag ends. */
+  const patchPath = (id, rings, record = false) => patchElement(id || nodeEditId || selectedId, { path: { rings } }, record);
+
+  /** Corner dragging streams previews too; the drag's begin/end records the step. */
+  const patchCorners = (corners) => patchElement(selectedId, { corners }, false);
+
+  /**
+   * Turn a picture into a path shape so its outline can be dragged: the picture
+   * becomes the shape's fill, exactly like the mask command, and any clip shape it
+   * already had becomes the starting outline. Returns the new rings.
+   */
+  const convertImageToPath = (element) => {
+    const outline = {
+      type: 'shape',
+      shape: element.clipShape && element.clipShape !== 'none' ? element.clipShape : 'rect',
+      x: element.x,
+      y: element.y,
+      w: element.w,
+      h: element.h,
+      radius: element.radius || 0,
+    };
+    const fields = ringsToPathShape(shapeRings(outline));
+    patchElement(element.id, {
+      ...fields,
+      type: 'shape',
+      fill: 'transparent',
+      fillImage: { src: element.src, fit: element.fit || 'cover' },
+      name: element.name || 'Picture',
+      // The picture-only fields go, so the element is a clean shape from here on.
+      src: undefined,
+      fit: undefined,
+      clipShape: undefined,
+      crop: undefined,
+      expandable: undefined,
+      corners: null,
+      cornerRadius: 0,
+    });
+    return fields.path.rings;
+  };
+
+  /** Turn a preset shape into a path so its points can be dragged. Returns the rings. */
+  const convertToPath = (element = selectedElement) => {
+    if (!element) return null;
+    if (element.type === 'image') return convertImageToPath(element);
+    if (element.type !== 'shape' || element.shape === 'path') return null;
+    const fields = ringsToPathShape(shapeRings(element));
+    patchElement(element.id, { ...fields, fill: element.fill, fillImage: element.fillImage });
+    return fields.path.rings;
+  };
+
+  /**
+   * The rings a dot drag starts from. An element that is already a path keeps its
+   * own; anything else is converted once, here, so the dots can be grabbed on a
+   * plain rectangle, a preset shape or a picture — and the element only changes
+   * when the user actually moves one.
+   */
+  const ensurePath = (element) => {
+    if (!element) return [];
+    if (element.path?.rings?.length) return cloneRings(element.path.rings);
+    return convertToPath(element) || [];
+  };
+
+  /** The ribbon's Edit points button shows or hides the dots on the selection. */
+  const toggleEditPoints = () => {
+    const next = !showPoints;
+    setShowPoints(next);
+    setToast({
+      type: 'info',
+      message: next
+        ? 'Edit dots on: drag a square to move a point, a diamond to bend an edge, Alt-click to remove one.'
+        : 'Edit dots hidden — the inspector still has corner radius, and Edit points brings them back.',
+    });
+  };
+
+  /**
+   * Boolean path operations. The shapes are flattened into polygons, combined and
+   * stored as one custom path — the same thing Figma's Union / Subtract /
+   * Intersect / Exclude do. The result keeps the base shape's fill, and its picture
+   * fill, so a masked photo survives the merge.
+   */
+  const combineShapes = (op) => {
+    const shapes = (slide?.elements || []).filter(
+      (element) => selectedIds.includes(element.id) && (element.type === 'shape' || element.type === 'image')
+    );
+    if (shapes.length < 2) {
+      setToast({ type: 'error', message: 'Select two or more shapes to combine them.' });
+      return;
+    }
+    // Bottom-most first, so Subtract cuts the upper shapes out of the lowest one.
+    const base = shapes[0];
+    const rings = booleanMany(
+      shapes.map((element) =>
+        element.type === 'image'
+          ? rectRings(element.x, element.y, element.w, element.h, element.radius || 0)
+          : shapeRings(element)
+      ),
+      op
+    );
+    if (!rings.length) {
+      setToast({ type: 'error', message: 'That combination leaves nothing behind.' });
+      return;
+    }
+    const combined = createShape('path', {
+      ...ringsToPathShape(rings),
+      fill: base.fillImage ? 'transparent' : base.fill,
+      fillImage: base.fillImage || null,
+      stroke: base.stroke,
+      strokeWidth: base.strokeWidth,
+      opacity: base.opacity ?? 1,
+      name: SHAPE_OP_LABELS[op] || 'Shape',
+    });
+    commitTextEdit();
+    apply((current) => ({
+      ...current,
+      slides: current.slides.map((item) => {
+        if (item.id !== slideId) return item;
+        const at = item.elements.findIndex((element) => element.id === base.id);
+        const kept = item.elements.filter((element) => !selectedIds.includes(element.id));
+        const next = [...kept];
+        next.splice(Math.max(0, Math.min(next.length, at)), 0, combined);
+        return { ...item, elements: next };
+      }),
+    }));
+    setSelectedIds([combined.id]);
+    setTool('select');
+    setToast({ type: 'success', message: `${SHAPE_OP_LABELS[op]}: ${shapes.length} shapes became one path.` });
+  };
+
+  /** Fill the selected shape with the selected picture — Figma's "use as mask". */
+  const maskWithShape = () => {
+    const shapes = (slide?.elements || []).filter((element) => selectedIds.includes(element.id));
+    const shape = shapes.find((element) => element.type === 'shape');
+    const picture = shapes.find((element) => element.type === 'image');
+    if (!shape || !picture) {
+      setToast({ type: 'error', message: 'Select a shape and a picture to mask.' });
+      return;
+    }
+    const masked = createShape('path', {
+      ...ringsToPathShape(shapeRings(shape)),
+      fill: 'transparent',
+      fillImage: { src: picture.src, fit: picture.fit || 'cover' },
+      stroke: shape.stroke,
+      strokeWidth: shape.strokeWidth,
+      name: 'Masked picture',
+    });
+    commitTextEdit();
+    apply((current) => ({
+      ...current,
+      slides: current.slides.map((item) => {
+        if (item.id !== slideId) return item;
+        const at = item.elements.findIndex((element) => element.id === picture.id);
+        const kept = item.elements.filter((element) => element.id !== picture.id && element.id !== shape.id);
+        const next = [...kept];
+        next.splice(Math.max(0, Math.min(next.length, at)), 0, masked);
+        return { ...item, elements: next };
+      }),
+    }));
+    setSelectedIds([masked.id]);
+    setToast({ type: 'success', message: 'Picture masked into the shape — move or reshape it freely.' });
   };
 
   const addTextBox = () => {
@@ -1336,6 +1831,15 @@ export default function Editor({ deckId, navigate }) {
   };
 
   /** Every ribbon control funnels through here. */
+  /** One radius for every corner — the ribbon's Corners field. */
+  const setCornerRadius = (radius) => {
+    if (!selectedElement || selectedElement.type !== 'shape') return;
+    const value = Math.max(0, Number(radius) || 0);
+    // A uniform radius replaces any per-corner values; `cornerRadius` is what
+    // rounds a preset polygon or a custom path.
+    patchElement(selectedElement.id, { radius: value, corners: null, cornerRadius: value });
+  };
+
   const handleRibbonAction = (id) => {
     switch (id) {
       /* File */
@@ -1459,9 +1963,29 @@ export default function Editor({ deckId, navigate }) {
       case 'ungroupShapes':
         return ungroupSelection();
 
+      /* Shape tools */
+      case 'penTool':
+        return useTool('pen');
+      case 'editPoints':
+        return toggleEditPoints();
+      case 'toPath':
+        return convertToPath();
+      case 'shapeUnion':
+        return combineShapes('union');
+      case 'shapeSubtract':
+        return combineShapes('subtract');
+      case 'shapeIntersect':
+        return combineShapes('intersect');
+      case 'shapeExclude':
+        return combineShapes('exclude');
+      case 'maskShape':
+        return maskWithShape();
+
       /* Editing */
       case 'find':
-        return goToMatch();
+        return openFindPanel('find');
+      case 'replace':
+        return openFindPanel('replace');
       case 'selectAll':
         return selectAllElements();
       case 'selectTop':
@@ -1810,6 +2334,25 @@ export default function Editor({ deckId, navigate }) {
             })}
           </div>
         );
+      case 'cornerRadius': {
+        const corners = selectedElement?.corners;
+        const value = corners
+          ? Math.max(corners.tl || 0, corners.tr || 0, corners.br || 0, corners.bl || 0)
+          : selectedElement?.cornerRadius || selectedElement?.radius || 0;
+        return (
+          <div className="ribbon-inline" title={item.title}>
+            <input
+              type="number"
+              className="ribbon-number"
+              min={0}
+              max={400}
+              value={Math.round(value)}
+              onChange={(event) => setCornerRadius(event.target.value)}
+            />
+            <span className="ribbon-readout">px</span>
+          </div>
+        );
+      }
       case 'bgColor':
         return (
           <label className="ribbon-field swatch" title="Background colour">
@@ -1964,18 +2507,53 @@ export default function Editor({ deckId, navigate }) {
         );
       case 'find':
         return (
-          <label className="ribbon-find" title="Find text on this slide">
+          <label className="ribbon-find" title="Find text in every slide (Ctrl+F)">
             <Icon name="search" size={17} />
             <input
+              ref={findInputRef}
               value={findQuery}
-              placeholder="Find on this slide"
-              onChange={(event) => setFindQuery(event.target.value)}
+              placeholder="Find in every slide"
+              onChange={(event) => {
+                setFindQuery(event.target.value);
+                setFindCursor(0);
+              }}
+              onFocus={() => setFindOpen(true)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') goToMatch();
+                if (event.key === 'Enter') goToMatch(event.shiftKey ? -1 : 1);
+                if (event.key === 'Escape') setFindOpen(false);
               }}
             />
-            <span>{findQuery ? findMatches.length : ''}</span>
+            <span title={findQuery ? `${findTotals.objects} objects` : ''}>
+              {findQuery ? findTotals.occurrences : ''}
+            </span>
+            <button
+              type="button"
+              className="ribbon-find-btn"
+              title="Find and replace across the deck (Ctrl+H)"
+              onClick={() => openFindPanel('replace')}
+            >
+              <Icon name="replace" size={16} />
+            </button>
           </label>
+        );
+      case 'replace':
+        return (
+          <button
+            type="button"
+            className={`ribbon-item small${findOpen ? ' on' : ''}`}
+            title={item.title || 'Find and replace across the deck (Ctrl+H)'}
+            onClick={() => openFindPanel('replace')}
+          >
+            <Icon name="replace" size={18} />
+            <span>Replace</span>
+          </button>
+        );
+      case 'systemInfo':
+        return (
+          <span className="ribbon-readout" title={item.title || 'Detected operating system'}>
+            <Icon name="monitor" size={17} />
+            {platformLabel(platform)} · {modifierKey(platform)} for shortcuts
+          </span>
         );
       case 'zoomLabel':
         return <span className="ribbon-readout">{Math.round(zoom * 100)}%</span>;
@@ -2090,6 +2668,13 @@ export default function Editor({ deckId, navigate }) {
         target &&
         (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
       if (event.key === 'Escape') {
+        // Leaving a shape tool comes before anything else.
+        if (tool !== 'select') {
+          setTool('select');
+          setNodeEditId(null);
+          return;
+        }
+        if (findOpen) return setFindOpen(false);
         if (shapeMenu) return setShapeMenu(false);
         if (tableTargetId) return closeTable();
         if (editingTextId) return commitTextEdit({ cancel: true });
@@ -2103,7 +2688,17 @@ export default function Editor({ deckId, navigate }) {
         commitTextEdit();
         return saveNow();
       }
+      if (mod && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        return openFindPanel('find');
+      }
+      if (mod && event.key.toLowerCase() === 'h') {
+        event.preventDefault();
+        return openFindPanel('replace');
+      }
       if (typing) return;
+      // The pen and the point editor own the keyboard while they are active.
+      if (tool !== 'select') return;
       if (mod && event.key.toLowerCase() === 'z') {
         event.preventDefault();
         return event.shiftKey ? redo() : undo();
@@ -2273,11 +2868,14 @@ export default function Editor({ deckId, navigate }) {
         onTabChange={setRibbonTab}
         onAction={handleRibbonAction}
         renderItem={renderRibbonItem}
+        platform={platform}
         state={{
           toggleRail: panels.rail,
           toggleInspector: panels.inspector,
           toggleTabs: panels.tabs,
           formatPainter: Boolean(formatClip),
+          penTool: tool === 'pen',
+          editPoints: showPoints,
         }}
         disabled={{
           // Commands that need something selected, or two objects, say so up front.
@@ -2286,6 +2884,13 @@ export default function Editor({ deckId, navigate }) {
           delete: !selectedIds.length,
           groupShapes: selectedElements.length < 2,
           ungroupShapes: !hasGroup(slideElements, selectedIds),
+          toPath: !selectedElement || !['shape', 'image'].includes(selectedElement.type),
+          cornerRadius: !selectedElement || selectedElement.type !== 'shape',
+          shapeUnion: selectedElements.length < 2,
+          shapeSubtract: selectedElements.length < 2,
+          shapeIntersect: selectedElements.length < 2,
+          shapeExclude: selectedElements.length < 2,
+          maskShape: selectedElements.length < 2,
         }}
         brand={
           <button type="button" className="brand-mini" onClick={() => navigate('/')} title="Back to library">
@@ -2573,6 +3178,14 @@ export default function Editor({ deckId, navigate }) {
             }}
             onEndTextEdit={(options) => commitTextEdit(options)}
             onCreateText={createTextAt}
+            tool={tool}
+            nodeEditId={nodeEditId}
+            showPoints={showPoints}
+            onEnsurePath={ensurePath}
+            onToolChange={setTool}
+            onCreatePath={createPathFromPen}
+            onPatchPath={patchPath}
+            onPatchCorners={patchCorners}
             textEditorRef={textEditorRef}
             animStep={animStep}
           />
@@ -2611,6 +3224,10 @@ export default function Editor({ deckId, navigate }) {
           onGroup={groupSelection}
           onUngroup={ungroupSelection}
           grouped={hasGroup(slideElements, selectedIds)}
+          onCombine={combineShapes}
+          onMask={maskWithShape}
+          onEditPoints={toggleEditPoints}
+          onToPath={() => convertToPath()}
           onPatchTextStyle={patchTextStyle}
           animations={slideAnimations}
           animStep={animStep}
@@ -2638,6 +3255,29 @@ export default function Editor({ deckId, navigate }) {
       )}
       {lightbox && <MediaLightbox element={lightbox} onClose={() => setLightbox(null)} />}
       {presentOpen && <PresentDialog deck={deck} onClose={() => setPresentOpen(false)} />}
+      {findOpen && (
+        <FindReplacePanel
+          query={findQuery}
+          replacement={replaceQuery}
+          totals={findTotals}
+          matchCase={findCase}
+          wholeWord={findWord}
+          inputRef={findInputRef}
+          replaceInputRef={replaceInputRef}
+          onQuery={(value) => {
+            setFindQuery(value);
+            setFindCursor(0);
+          }}
+          onReplacement={setReplaceQuery}
+          onMatchCase={setFindCase}
+          onWholeWord={setFindWord}
+          onPrevious={() => goToMatch(-1)}
+          onNext={() => goToMatch(1)}
+          onReplace={replaceCurrent}
+          onReplaceAll={replaceAll}
+          onClose={() => setFindOpen(false)}
+        />
+      )}
       {shortcutsOpen && (
         <div className="modal-backdrop" onClick={() => setShortcutsOpen(false)}>
           <div className="shortcuts-card" onClick={(event) => event.stopPropagation()}>
@@ -2653,11 +3293,14 @@ export default function Editor({ deckId, navigate }) {
             <div className="shortcuts-grid">
               {KEYBOARD_SHORTCUTS.map(([keys, action]) => (
                 <div className="shortcut-row" key={keys}>
-                  <kbd>{keys}</kbd>
+                  <kbd>{shortcutLabel(keys, platform)}</kbd>
                   <span>{action}</span>
                 </div>
               ))}
             </div>
+            <small className="field-hint">
+              Shown for {platformLabel(platform)} — the keys you actually press on this machine.
+            </small>
           </div>
         </div>
       )}
@@ -2679,5 +3322,7 @@ export default function Editor({ deckId, navigate }) {
     </div>
   );
 }
+
+
 
 
