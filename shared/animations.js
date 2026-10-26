@@ -53,6 +53,12 @@ export const EFFECT_CATALOG = [
   { id: 'swivel', label: 'Swivel', kinds: ['entrance', 'exit'], directions: ['horizontal', 'vertical'] },
   { id: 'bounce', label: 'Bounce', kinds: ['entrance', 'exit', 'emphasis'] },
   { id: 'pop', label: 'Pop', kinds: ['entrance', 'exit'] },
+  {
+    id: 'dynamic',
+    label: 'Dynamic',
+    kinds: ['entrance', 'exit', 'emphasis'],
+    directions: ['left', 'right'],
+  },
   { id: 'waterDrip', label: 'Water drip', kinds: ['entrance', 'exit'] },
   { id: 'bars', label: 'Random bars', kinds: ['entrance', 'exit'], directions: ['horizontal', 'vertical'] },
   { id: 'strips', label: 'Strips', kinds: ['entrance', 'exit'], directions: ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'] },

@@ -166,7 +166,8 @@ one after another:
 npm test              # unit tests, including the panel sizes and the install route
 npm run e2e:panels    # hiding and dragging the side panels, in a desktop-sized window
 npm run e2e:mobile    # the phone layout: sheets, pinch zoom, the installable app files
-node e2e-transitions.mjs      # the transitions and object effects, played in a show
+node e2e-transitions.mjs      # the transitions, object effects and the character wave, played in a show
+node e2e-motion-backgrounds.mjs  # looping scene and video slide backgrounds, in the editor and the show
 node e2e-editor-actions.mjs   # the editor's own actions, read back from the server
 node e2e-find-replace.mjs     # find & replace across the deck
 node e2e-controls-audit.mjs   # clicks every ribbon control and reports any error
@@ -319,6 +320,15 @@ The inspector shows a **system** badge and the editor footer shows the active fo
   (rides a swell, a slow bob with a soft squash). **Bounce** also works as an *emphasis*, so an object can bounce
   where it stands as well as bounce in from off-slide. The waving pair plays twice and, like every emphasis, hands
   the object back exactly as it found it.
+- **Dynamic** waves a text box along **one character at a time**, and the direction picks which end the wave starts
+  from — **From left** starts at the first character, **From right** at the last. The box itself is left out of it:
+  every character gets the same keyframes with its own delay (`characterStyle` in `src/lib/animations.js`), so the
+  wave travels through the words and the whole thing lands in about the effect's own duration whatever the length of
+  the text. It works as an entrance (characters rise into place), an exit (they drop away in turn) and an emphasis
+  (they swing where they stand, without hiding). Characters are split with `Array.from`, so a surrogate pair stays
+  in one piece, and the runs of a styled text box keep their own formatting while waving.
+  A text box that carries **rich HTML** cannot be split without breaking its markup, so it waves as a whole box, and
+  an object that is not text moves as a whole too.
 - Motion paths keep their real points and move the element along the net displacement, scaled to the slide size.
 - The live audience follows the step, not just the slide, so everyone sees each item appear together.
 - **Authoring:** select any object → *Animation* in the inspector. Add an Entrance / Emphasis / Exit effect,
@@ -375,6 +385,25 @@ The inspector shows a **system** badge and the editor footer shows the active fo
   and the WebSocket audience stay in step.
 - Slide backgrounds — solid colour, gradient and images — always paint **edge-to-edge across the display**;
   slide content is letterboxed (or fills the screen with the Fill toggle) without exposing empty bars.
+- **A slide can also wear a moving background**, in the inspector under *Background*:
+  - **Motion backgrounds** (`src/lib/motionBackgrounds.js`, drawn by `src/components/BackgroundMedia.jsx`) are
+    looping scenes written in SVG and animated by CSS — **Bouncing ball** (crosses the floor, squashing as it
+    lands), **Falling coin** (coins spin and drop past the slide), **Open book** (leaves turn over the spine),
+    **Playing keyboard** (keys press themselves in a rhythm) and **Jumping microphone** (drops in, bounces,
+    settles). Nothing to download and no decoder: they repeat for as long as the slide is on screen, at an
+    opacity, blur and **speed** you set (the speed is handed to CSS as `--motion-speed`, which every scene divides
+    its own pace by). Each scene's keyframes live in `src/styles.css`; the unit tests read that stylesheet to prove
+    every scene still has keyframes, that they all say `infinite`, and that they all answer the speed control.
+  - **Video backgrounds**: upload a clip (**Upload a looping video**) or paste an mp4/webm URL. It plays **muted on
+    a loop**, inline, which is the only kind of autoplay a browser allows without asking, and it covers the slide
+    the way the Fit control says (cover / contain / stretch), with its own opacity and blur. An uploaded clip is
+    stored through the same asset route as images and served from `/media`. Typed URLs are applied on Enter or when
+    the field is left; a source the app will not play (`javascript:`, `file://`, a bare Windows path) is refused
+    and the field goes back to what the slide is actually wearing.
+  - Both layers sit **above the colour/gradient/picture and below the objects**, so slide content stays readable,
+    and they show up everywhere the slide does: the editor canvas, the presenter window and the audience outputs.
+    In the **thumbnail rail** they are held still (the scene is paused and the video is not decoded), so a long
+    deck does not run a scene per slide.
 - Click images/video/audio to open an expandable viewer: images zoom (25–600%, wheel, pan), video plays large,
   audio gets a full player.
 
@@ -523,7 +552,9 @@ shape — a fill (or a picture fill), a border, text, rotation and animation all
 - Drag-and-drop images/video/audio onto the canvas; media uploads go through the server.
 - Double-click the canvas to write, double-click a box to re-edit; formatting from the floating toolbar.
 - Slide background designer: colour, **gradient presets** (linear/radial with start/end colours and angle), image
-  upload/URL, cover/contain/stretch, opacity and blur.
+  upload/URL, cover/contain/stretch, opacity and blur — plus **looping motion scenes** (bouncing ball, falling coin,
+  open book, playing keyboard, jumping microphone) and **looping video backgrounds** (upload or URL, muted, with
+  their own fit, opacity, blur and speed).
 - Speaker notes and slide transitions.
 - Autosave (debounced) with save-state indicator and manual Ctrl/Cmd+S.
 
@@ -572,18 +603,20 @@ src/
   App.jsx       Tiny history router (/ , /edit/:id , /present/:id , /live/:code)
   pages/        Home, Editor, Presenter, LiveAudience
   components/   Ribbon + DocumentTabs + Popover (window chrome), AnnotationLayer, Canvas,
-                SlideView/ElementView, TextToolbar, TableEditor, Inspector, PresentDialog, Stage, Lightbox…
+                SlideView/ElementView, TextToolbar, TableEditor, Inspector, PresentDialog, Stage, Lightbox…,
+                BackgroundMedia (looping scene/video slide backgrounds)…
   hooks/        Undo/redo deck history, open document tabs (localStorage), workspace picture
   lib/          API client, element factories, rich-text sanitizer, backgrounds/picture fills, animations,
-                annotations, shapes, fonts, ribbon model, slide layouts
+                motion backgrounds (looping scenes + video backgrounds), annotations, shapes, fonts, ribbon model,
+                slide layouts
 scripts/
   build-exe.mjs     Bundles the server, makes the SEA blob and injects it into the Node runtime
   embed-client.mjs  Inlines dist/ into server/generated/client-assets.js
   make-icon.mjs     Draws the app icon (build/icon.ico + a PNG preview)
   start-server.mjs  Cross-platform `npm start`
   smoke-test.mjs    End-to-end checks against a running instance
-tests/          Node test suites for formulas, PPTX import, rich text, the ribbon/layout model, picture fills
-                and presenting annotations
+tests/          Node test suites for formulas, PPTX import, rich text, the ribbon/layout model, picture fills,
+                animations, transitions, motion backgrounds and presenting annotations
 ```
 
 ### Scripts
@@ -620,6 +653,15 @@ tests/          Node test suites for formulas, PPTX import, rich text, the ribbo
 - Very exotic OOXML features (SmartArt, charts, animations, embedded OLE) are not reconstructed as editable
   objects; text, shapes, images, media and tables are.
 - Video playback in the packaged demo points at a public sample MP4; upload your own media for offline decks.
+- A **video background** has to be a format the browser can play (mp4/H.264 or webm) and, because it is fetched by
+  the page, a *linked* URL also needs that host to allow the request. A local path on your machine (`file://`, a
+  Windows path) is refused on purpose — upload the file instead and it is served from `/media`.
+- The **Dynamic** character wave needs plain or run-formatted text: a text box that carries rich HTML (from an
+  imported deck or the formatting toolbar) waves as a whole box, since splitting HTML would break its markup. An
+  imported deck's `<p:animEffect>`/`<p:transition>` presets are still mapped onto the closest CSS effect — Dynamic
+  itself is authored in the editor, not imported.
+- Motion scenes are drawn, not filmed: they are simple SVG shapes on purpose, so they read as a background instead
+  of competing with the words on the slide.
 - The app has no authentication. It is intended for local/trusted-network use, with decks and uploads stored on
   the server.
 

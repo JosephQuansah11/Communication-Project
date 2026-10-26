@@ -7,7 +7,7 @@ import { normalizePictureFill, pictureFillCss, picturePatternLayout } from '../l
 import { fontStack } from '../lib/fonts.js';
 import { hasRichHtml, htmlToPlainText, sanitizeHtml, textElementHtml } from '../lib/richtext.js';
 import { hasTextPicture, textMaskStyle } from '../lib/textmask.js';
-import { animationStyle, resolveElementAnimation } from '../lib/animations.js';
+import { animationStyle, characterStyle, isPerCharacter, resolveElementAnimation, splitCharacters } from '../lib/animations.js';
 import { onlineVideoEmbedUrl, parseOnlineVideo } from '../../shared/video.js';
 
 function gradientDefs(fill, id) {
@@ -97,12 +97,15 @@ export function ShapeArt({ element }) {
   );
 }
 
-function RichText({ element }) {
+function RichText({ element, characters }) {
   if (!element.runs?.length) return element.text;
   const joined = element.runs.map((run) => run.text).join('');
   if (joined !== element.text) return element.text;
+  let offset = 0;
   return element.runs.map((run, index) => {
     const scripted = run.superscript || run.subscript;
+    const start = offset;
+    offset += String(run.text || '').length;
     return (
       <span
         key={index}
@@ -118,26 +121,44 @@ function RichText({ element }) {
           whiteSpace: 'pre-wrap',
         }}
       >
-        {run.text}
+        {characters ? splitCharacters(run.text).map((character, position) => characterSpan(character, characters, start + position)) : run.text}
       </span>
     );
   });
 }
 
 /**
+ * One character of a per-character animation. The character's own place in the text
+ * decides its delay, so a run of styled text waves in the same order as plain text.
+ */
+function characterSpan(character, characters, index) {
+  return (
+    <span key={index} className="anim-char" style={characterStyle(characters.animation, index, characters.count, characters.played)}>
+      {character}
+    </span>
+  );
+}
+
+/**
  * Renders a text box body: formatted HTML when the box carries it, otherwise the
  * imported runs, otherwise plain text. A `style`-level highlight/script wraps
  * the plain fallback so box-level formatting still shows.
+ *
+ * `characters` is set when the box is animating one character at a time; rich HTML
+ * cannot be split without breaking its markup, so those boxes animate as a whole.
  */
-function RichContent({ element }) {
+function RichContent({ element, characters }) {
   const style = element.style || {};
   const scripted = style.superscript || style.subscript;
   const html = sanitizeHtml(textElementHtml(element));
   if (hasRichHtml(html)) {
     return <div className="rich-text" dangerouslySetInnerHTML={{ __html: html }} />;
   }
-  if (element.runs?.length) return <RichText element={element} />;
+  if (element.runs?.length) return <RichText element={element} characters={characters} />;
   const highlight = style.highlight || undefined;
+  if (characters) {
+    return splitCharacters(element.text).map((character, index) => characterSpan(character, characters, index));
+  }
   if (!highlight && !scripted) return element.text;
   return (
     <span
@@ -279,7 +300,24 @@ export default function ElementView({
     typeof animStep === 'number' && animations?.length
       ? resolveElementAnimation(animations, element.id, animStep)
       : null;
-  const animationStyles = animationStyle(resolvedAnimation, slideSize) || null;
+  /**
+   * A per-character effect (Dynamic) belongs to the characters, not to the box, so
+   * the box must not animate as well. Rich HTML cannot be split without breaking its
+   * markup, so a box carrying it falls back to animating as a whole.
+   */
+  const characterCount =
+    element.type === 'text'
+      ? splitCharacters(element.runs?.length ? element.runs.map((run) => run.text).join('') : element.text).length
+      : 0;
+  const perCharacter =
+    Boolean(resolvedAnimation) &&
+    isPerCharacter(resolvedAnimation.animation) &&
+    characterCount > 0 &&
+    !hasRichHtml(sanitizeHtml(textElementHtml(element)));
+  const characterAnimation = perCharacter
+    ? { animation: resolvedAnimation.animation, played: resolvedAnimation.played, count: characterCount }
+    : null;
+  const animationStyles = perCharacter ? null : animationStyle(resolvedAnimation, slideSize) || null;
   const animationClass = resolvedAnimation ? ' slide-animated' : '';
 
   const baseStyle = {
@@ -495,7 +533,7 @@ export default function ElementView({
               ...(masked ? textMaskStyle(element.textImage) : null),
             }}
           >
-            {masked ? htmlToPlainText(textElementHtml(element)) : <RichContent element={element} />}
+            {masked ? htmlToPlainText(textElementHtml(element)) : <RichContent element={element} characters={characterAnimation} />}
           </div>
         )}
       </div>

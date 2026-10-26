@@ -4,6 +4,8 @@ import { SHAPES, SHAPE_POINTS } from '../lib/shapes.js';
 import { SHAPE_OPS } from '../lib/paths.js';
 import { TEXT_FITS } from '../lib/textmask.js';
 import { BACKGROUND_PRESETS, describeBackground, gradientCss, normalizePictureFill, similarBackgroundFor } from '../lib/backgrounds.js';
+import { MOTION_BACKGROUNDS, motionLabel, normalizeBackgroundVideo } from '../lib/motionBackgrounds.js';
+import { MotionScene } from './BackgroundMedia.jsx';
 import {
   ANIMATION_KINDS,
   DIRECTION_LABELS,
@@ -11,7 +13,7 @@ import {
   effectsForKind,
   normalizeAnimation,
 } from '../../shared/animations.js';
-import { describeAnimation } from '../lib/animations.js';
+import { describeAnimation, isPerCharacter } from '../lib/animations.js';
 import { TRANSITIONS, transitionFor } from '../../shared/transitions.js';
 import { isOnlineVideo, onlineVideoLabel } from '../../shared/video.js';
 
@@ -319,6 +321,8 @@ export default function Inspector({
 }) {
   const bgInput = useRef(null);
   const mediaInput = useRef(null);
+  /** The hidden file input behind the looping-video background. */
+  const videoInput = useRef(null);
   /** Picture shown through a text box's letters. */
   const textImageInput = useRef(null);
   const shapeImageInput = useRef(null);
@@ -528,6 +532,31 @@ export default function Inspector({
 
   if (!element) {
     const background = slide?.background || {};
+    /**
+     * Apply a typed video URL. The field is uncontrolled so a half-typed address never
+     * reaches the deck; this runs when the field is left or Enter is pressed. An empty
+     * field clears the video, and an address the app cannot play is refused and the
+     * field goes back to what the slide is actually wearing.
+     */
+    const commitVideoUrl = (typed, node) => {
+      const value = String(typed || '').trim();
+      const stored = background.video?.src || '';
+      if (value === stored) return;
+      if (!value) {
+        onPatchSlide({ background: { ...background, video: null } });
+        return;
+      }
+      const video = normalizeBackgroundVideo({
+        ...(background.video || {}),
+        src: value,
+        name: background.video?.name || 'linked video',
+      });
+      if (!video) {
+        if (node) node.value = stored;
+        return;
+      }
+      onPatchSlide({ background: { ...background, video } });
+    };
     return (
       <aside className="inspector">
         <div className="inspector-head">
@@ -566,6 +595,166 @@ export default function Inspector({
               })}
             </div>
             <small className="field-hint">Colours, gradients and images all paint edge-to-edge when presenting.</small>
+          </div>
+          <div className="field">
+            <label>
+              Motion background
+              <span className="field-value">{background.motion ? motionLabel(background.motion.id) : 'off'}</span>
+            </label>
+            <div className="bg-presets motion-presets">
+              {MOTION_BACKGROUNDS.map((scene) => (
+                <button
+                  key={scene.id}
+                  type="button"
+                  title={`${scene.label} — ${scene.hint}`}
+                  className={`motion-preset ${background.motion?.id === scene.id ? 'on' : ''}`}
+                  onClick={() =>
+                    onPatchSlide({
+                      // The scene's own settings are kept when switching between
+                      // scenes; only the id changes.
+                      background: {
+                        ...background,
+                        motion: { opacity: 0.45, blur: 0, speed: 1, ...(background.motion || {}), id: scene.id },
+                      },
+                    })
+                  }
+                >
+                  <span className={`motion-preview motion-${scene.id}`}>
+                    <MotionScene id={scene.id} />
+                  </span>
+                  {scene.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                title="No moving background"
+                className={`motion-preset ${background.motion ? '' : 'on'}`}
+                onClick={() => onPatchSlide({ background: { ...background, motion: null } })}
+              >
+                <span className="motion-preview motion-off"><Icon name="close" size={18} /></span>
+                None
+              </button>
+            </div>
+            <small className="field-hint">
+              Looping scenes drawn behind the slide — nothing to download, and they keep looping for as long as the slide
+              is on screen. They sit under the objects, so the words stay readable.
+            </small>
+            {background.motion && (
+              <>
+                <SliderField
+                  label="Motion opacity"
+                  value={Math.round((background.motion.opacity ?? 0.45) * 100)}
+                  min={5}
+                  max={100}
+                  suffix="%"
+                  onChange={(value) => onPatchSlide({ background: { ...background, motion: { ...background.motion, opacity: value / 100 } } })}
+                />
+                <SliderField
+                  label="Motion blur"
+                  value={background.motion.blur || 0}
+                  min={0}
+                  max={30}
+                  suffix="px"
+                  onChange={(value) => onPatchSlide({ background: { ...background, motion: { ...background.motion, blur: value } } })}
+                />
+                <SliderField
+                  label="Motion speed"
+                  value={Math.round((background.motion.speed ?? 1) * 100)}
+                  min={25}
+                  max={300}
+                  suffix="%"
+                  onChange={(value) => onPatchSlide({ background: { ...background, motion: { ...background.motion, speed: value / 100 } } })}
+                />
+              </>
+            )}
+          </div>
+          <div className="field">
+            <label>
+              Video background
+              <span className="field-value">{background.video ? background.video.name || 'video' : 'off'}</span>
+            </label>
+            <div className="row-gap">
+              <button type="button" className="wide-btn" onClick={() => videoInput.current?.click()}>
+                <Icon name="upload" size={18} /> Upload a looping video
+              </button>
+              {background.video && (
+                <button type="button" className="wide-btn danger" onClick={() => onPatchSlide({ background: { ...background, video: null } })}>
+                  <Icon name="trash" size={16} /> Remove
+                </button>
+              )}
+            </div>
+            <input
+              ref={videoInput}
+              type="file"
+              accept="video/*"
+              hidden
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (!file || !onUpload) return;
+                const asset = await onUpload(file);
+                if (asset?.url) {
+                  onPatchSlide({
+                    background: {
+                      ...background,
+                      video: { src: asset.url, name: asset.name || file.name, fit: 'cover', opacity: 1, blur: 0, loop: true, muted: true },
+                    },
+                  });
+                }
+              }}
+            />
+            <input
+              key={`${slide.id}-${background.video?.src || 'none'}`}
+              className="text-input"
+              placeholder="…or paste a video URL (mp4 / webm)"
+              defaultValue={background.video?.src || ''}
+              onBlur={(event) => commitVideoUrl(event.target.value, event.target)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') commitVideoUrl(event.target.value, event.target);
+              }}
+            />
+            <small className="field-hint">
+              Plays muted on a loop behind the slide — in the editor, the presenter and the audience view. Muted is what
+              lets a browser start it without asking. Press Enter or click away to apply a typed URL.
+            </small>
+            {background.video && (
+              <>
+                <Toggle
+                  label="Loop"
+                  hint="Start again when it ends"
+                  checked={background.video.loop !== false}
+                  onChange={(loop) => onPatchSlide({ background: { ...background, video: { ...background.video, loop } } })}
+                />
+                <div className="field compact">
+                  <label>Fit</label>
+                  <select
+                    className="text-input"
+                    value={background.video.fit || 'cover'}
+                    onChange={(event) => onPatchSlide({ background: { ...background, video: { ...background.video, fit: event.target.value } } })}
+                  >
+                    <option value="cover">Cover — fill the slide</option>
+                    <option value="contain">Contain — show everything</option>
+                    <option value="stretch">Stretch to slide</option>
+                  </select>
+                </div>
+                <SliderField
+                  label="Video opacity"
+                  value={Math.round((background.video.opacity ?? 1) * 100)}
+                  min={5}
+                  max={100}
+                  suffix="%"
+                  onChange={(value) => onPatchSlide({ background: { ...background, video: { ...background.video, opacity: value / 100 } } })}
+                />
+                <SliderField
+                  label="Video blur"
+                  value={background.video.blur || 0}
+                  min={0}
+                  max={30}
+                  suffix="px"
+                  onChange={(value) => onPatchSlide({ background: { ...background, video: { ...background.video, blur: value } } })}
+                />
+              </>
+            )}
           </div>
           <div className="field">
             <label>
@@ -1258,6 +1447,13 @@ export default function Inspector({
                     <option key={direction} value={direction}>{DIRECTION_LABELS[direction] || direction}</option>
                   ))}
                 </select>
+                {isPerCharacter(activeAnimation) && (
+                  <small className="field-hint">
+                    Dynamic waves the characters one by one, starting from the{' '}
+                    {activeAnimation.direction === 'right' ? 'right' : 'left'} end of the text. Anything that is not a
+                    text box moves as a whole.
+                  </small>
+                )}
               </div>
             )}
             <div className="field-grid">

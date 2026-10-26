@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import SlideView from './SlideView.jsx';
+import BackgroundMedia from './BackgroundMedia.jsx';
 import { backgroundStyles } from '../lib/backgrounds.js';
 
 export function useStageScale(width, height, mode = 'contain') {
@@ -63,6 +64,8 @@ export default function Stage({
           ...(layer || { backgroundColor: shellColor }),
         }}
       />
+      {/* The looping scene or video behind the slide's own objects. */}
+      <BackgroundMedia background={background} />
       {scale > 0 && (
         <div
           className="stage-content"

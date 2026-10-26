@@ -53,6 +53,7 @@ const SHARED_KEYFRAMES = {
   boomerang: 'anim-slide',
   bounce: 'anim-bounce',
   pop: 'anim-pop',
+  dynamic: 'anim-dynamic',
   waterDrip: 'anim-water-drip',
   wave: 'anim-wave',
   waterWave: 'anim-water-wave',
@@ -94,6 +95,9 @@ export function keyframeFor(animation) {
   // Bounce is an entrance for an object arriving and an emphasis for one bouncing
   // where it stands, so it is the one effect with two sets of keyframes.
   if (animation.effect === 'bounce' && animation.kind === 'emphasis') return 'anim-bounce-in-place';
+  // Dynamic waves a text box along character by character; as an emphasis it moves
+  // the letters without hiding them.
+  if (animation.effect === 'dynamic' && animation.kind === 'emphasis') return 'anim-dynamic-emphasis';
   const base = SHARED_KEYFRAMES[animation.effect] || 'anim-fade';
   return animation.kind === 'exit' ? `${base}-out` : base;
 }
@@ -104,6 +108,10 @@ function timingFunction(animation) {
   if (animation.effect === 'pop') return 'cubic-bezier(0.34, 1.56, 0.64, 1)';
   // A drip falls under gravity and lands soft.
   if (animation.effect === 'waterDrip') return animation.kind === 'exit' ? 'ease-in' : 'cubic-bezier(0.45, 0, 0.55, 1)';
+  // A character wave springs into place; as an emphasis it swings evenly.
+  if (animation.effect === 'dynamic') {
+    return animation.kind === 'emphasis' ? 'ease-in-out' : 'cubic-bezier(0.33, 1.3, 0.5, 1)';
+  }
   if (animation.effect === 'wave' || animation.effect === 'waterWave') return 'ease-in-out';
   if (animation.effect === 'appear' || animation.effect === 'flash') return 'steps(1, end)';
   if (animation.kind === 'emphasis') return 'ease-in-out';
@@ -221,4 +229,73 @@ export function describeAnimation(animation) {
     animation.trigger === 'click' ? 'on click' : animation.trigger === 'after' ? 'after previous' : 'with previous'
   );
   return parts.join(' · ');
+}
+
+/* ----------------------------------------------------------------------- *
+ * Character-by-character effects
+ *
+ * Dynamic waves a text box along one character at a time. The box itself does not
+ * animate: every character gets the same keyframes with its own delay, so the wave
+ * travels through the words. `direction` chooses which end it starts from — 'left'
+ * starts at the first character, 'right' at the last — which is the whole of what
+ * the direction means for this effect.
+ * ----------------------------------------------------------------------- */
+
+/** Effects that animate a text box one character at a time. */
+export const PER_CHARACTER_EFFECTS = ['dynamic'];
+
+/**
+ * Split text into the units a wave should travel along: one entry per character,
+ * with spaces and newlines kept so the words stay where they were. `Array.from`
+ * keeps a surrogate pair (an emoji) in one piece rather than tearing it in half.
+ */
+export function splitCharacters(text) {
+  if (text === null || text === undefined) return [];
+  return Array.from(String(text));
+}
+
+/** Whether this animation should be handed to the characters instead of the box. */
+export function isPerCharacter(animation) {
+  return Boolean(animation) && PER_CHARACTER_EFFECTS.includes(animation.effect);
+}
+
+/**
+ * The gap between one character and the next, in milliseconds.
+ *
+ * The characters overlap rather than queueing up — the whole wave should land
+ * inside roughly the effect's own duration — and the gap is clamped so a single
+ * character does not wait for a beat and a long paragraph does not crawl.
+ */
+export function characterStagger(animation, count) {
+  const characters = Math.max(1, Math.round(Number(count) || 1));
+  const duration = Math.max(1, animation?.duration || 500);
+  const step = Math.round(duration / Math.max(3, characters * 0.6));
+  return Math.min(140, Math.max(14, step));
+}
+
+/** How long the whole wave takes, including the last character's own animation. */
+export function characterRunTime(animation, count) {
+  const characters = Math.max(1, Math.round(Number(count) || 1));
+  return Math.max(1, animation?.duration || 500) + characterStagger(animation, characters) * (characters - 1);
+}
+
+/**
+ * Inline style for one character of a box.
+ * @param {object} animation the resolved animation
+ * @param {number} index the character's position, counting from the start of the text
+ * @param {number} count how many characters the text has
+ * @param {boolean} played whether the character's step has already played
+ */
+export function characterStyle(animation, index, count, played = true) {
+  const characters = Math.max(1, Math.round(Number(count) || 1));
+  const order = animation.direction === 'right' ? characters - 1 - index : index;
+  return {
+    animationName: keyframeFor(animation),
+    animationDuration: `${Math.max(1, animation.duration || 500)}ms`,
+    animationDelay: `${(animation.delay || 0) + Math.max(0, order) * characterStagger(animation, characters)}ms`,
+    animationTimingFunction: timingFunction(animation),
+    animationFillMode: 'both',
+    animationIterationCount: 1,
+    animationPlayState: played ? 'running' : 'paused',
+  };
 }

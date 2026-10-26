@@ -1,4 +1,5 @@
 import ElementView from './ElementView.jsx';
+import BackgroundMedia from './BackgroundMedia.jsx';
 import { backgroundStyles } from '../lib/backgrounds.js';
 
 export default function SlideView({
@@ -46,6 +47,9 @@ export default function SlideView({
         }}
       >
         {!hideBackground && layer && <div className="slide-background-image" style={layer} />}
+        {/* A motion scene or a looping video sits above the picture and below the
+            objects, so slide content always stays readable on top of it. */}
+        {!hideBackground && <BackgroundMedia background={background} paused={preview} />}
         {slide.elements?.map((element) => (
           <ElementView
             key={element.id}

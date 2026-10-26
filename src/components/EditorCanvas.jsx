@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import ElementView from './ElementView.jsx';
 import Icon from './Icon.jsx';
+import BackgroundMedia from './BackgroundMedia.jsx';
 import TextToolbar from './TextToolbar.jsx';
 import { backgroundStyles } from '../lib/backgrounds.js';
 import { createCoalesce } from '../lib/throttle.js';
@@ -951,6 +952,8 @@ export default function EditorCanvas({
             }}
           >
             {bgLayer && <div className="canvas-bg-image" style={bgLayer} />}
+            {/* The looping scene or video the slide wears, under its objects. */}
+            <BackgroundMedia background={slide.background} />
             {slide.elements?.length === 0 && (
               <div className="empty-slide-hint">
                 <Icon name="sparkle" size={31} />

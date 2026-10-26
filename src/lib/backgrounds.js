@@ -105,6 +105,8 @@ export function describeBackground(background = {}) {
   const parts = [];
   if (background.image) parts.push('image');
   if (background.gradient) parts.push('gradient');
+  if (background.motion) parts.push('motion');
+  if (background.video) parts.push('video');
   parts.push('colour');
   return parts.join(' + ');
 }

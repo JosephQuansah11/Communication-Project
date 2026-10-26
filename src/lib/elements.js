@@ -2,6 +2,7 @@ import { htmlToPlainText, sanitizeHtml } from './richtext.js';
 import { normalizeAnimations } from '../../shared/animations.js';
 import { normalizeTransition } from '../../shared/transitions.js';
 import { normalizePictureFill } from './backgrounds.js';
+import { normalizeBackgroundVideo, normalizeMotionBackground } from './motionBackgrounds.js';
 import { onlineVideoLabel, parseOnlineVideo } from '../../shared/video.js';
 import { ringsToPathShape } from './paths.js';
 
@@ -32,6 +33,10 @@ export const BACKGROUND_DEFAULT = {
   fit: 'cover',
   opacity: 1,
   blur: 0,
+  /** A looping scene from `lib/motionBackgrounds.js`, or null. */
+  motion: null,
+  /** A looping video: `{ src, fit, opacity, blur, loop, muted }`, or null. */
+  video: null,
 };
 
 export function createSlide(overrides = {}) {
@@ -242,6 +247,21 @@ export function createTable(rows = 5, cols = 4, overrides = {}) {
   };
 }
 
+/**
+ * A slide background, with the two moving layers sanitized: an unknown scene id or a
+ * video source that is not a path/URL we can fetch becomes `null`, so a hand-edited
+ * or imported deck can never point the slide at something that will not load.
+ */
+export function normalizeSlideBackground(background) {
+  const source = background || {};
+  return {
+    ...BACKGROUND_DEFAULT,
+    ...source,
+    motion: normalizeMotionBackground(source.motion),
+    video: normalizeBackgroundVideo(source.video),
+  };
+}
+
 export function normalizeDeck(deck) {
   if (!deck) return deck;
   const width = Number(deck.width) || 1280;
@@ -249,7 +269,7 @@ export function normalizeDeck(deck) {
   const slides = (deck.slides || []).map((slide, slideIndex) => ({
     ...slide,
     id: slide.id || uid('slide'),
-    background: { ...BACKGROUND_DEFAULT, ...(slide.background || {}) },
+    background: normalizeSlideBackground(slide.background),
     notes: slide.notes || '',
     transition: normalizeTransition(slide.transition),
     animations: normalizeAnimations(slide.animations),
