@@ -29,6 +29,7 @@ export const FILE_ITEMS = [
   { id: 'file:save', label: 'Save now', icon: 'save', title: 'Save (Ctrl+S)' },
   { id: 'file:import', label: 'Import PPTX / WPS…', icon: 'import', title: 'Import a PowerPoint or WPS file' },
   { id: 'file:duplicate', label: 'Duplicate presentation', icon: 'copy', title: 'Save a copy of this deck' },
+  { id: 'file:install', label: 'Install app', icon: 'download', title: 'Install QuandrionSlideMaster on this phone or computer' },
   { id: 'file:export', label: 'Download deck JSON', icon: 'download', title: 'Export the deck as JSON' },
   { id: 'file:delete', label: 'Delete presentation', icon: 'trash', title: 'Delete this deck', danger: true },
 ];

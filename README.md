@@ -19,6 +19,41 @@ npm test           # formula engine, PPTX importer and rich-text tests
 Data lives in `data/` (decks and uploaded media). On first run a five-slide product tour is generated in
 `data/decks/demo.json` with demo imagery and audio.
 
+## Use it on a phone (installable web app)
+
+The editor is a web app, so the mobile version is the same app: open it in the phone's browser and **add it to the
+home screen**. It then runs full-screen with its own icon, opens without a network round trip, and keeps the deck in
+sync with the server it was served from.
+
+| Phone | How to install |
+| --- | --- |
+| **iPhone / iPad (Safari)** | Share ▸ **Add to Home Screen** |
+| **Android (Chrome, Edge, Samsung Internet)** | ⋮ menu ▸ **Install app** (or **Add to Home screen**) |
+
+Inside the app, *File ▸ Install app* does the right thing for whichever device you are on: it replays the browser's
+install prompt on Android, and explains the Share menu on iOS, which has no prompt to replay.
+
+**What changes on a phone.** The desktop window is three columns side by side — slides, canvas, tools. On a narrow
+screen the canvas takes the whole width and the two side columns become **sheets** that slide over it, opened from a
+bottom bar with *Slides*, *Tools*, *Undo* and *Present*. Controls grow to a 44px touch target, the layout uses the
+notch-safe areas (`viewport-fit=cover` plus `env(safe-area-inset-*)`), and height comes from `dvh` so the browser's
+URL bar appearing does not crop the canvas. The canvas owns its touch gestures: **two fingers pinch to zoom** (mouse
+wheel with Ctrl still works on a desktop), and dragging an object never scrolls the page.
+
+**What is installable.** `public/manifest.webmanifest` declares the name, the standalone display mode and the icons
+(192/512 plus a maskable one for Android launchers, and a flattened `apple-touch-icon` because iOS paints transparent
+pixels black). `public/sw.js` caches the shell — the HTML and the hashed build assets — so the app opens offline and
+serves cached assets instantly, while decks, uploads and the live websocket always go to the network. The service
+worker is registered in production only, so `npm run dev` never hides your changes behind a cache. Icons are
+generated with `npm run icons` from the same artwork as the executable's.
+
+**Shipping it to the App Store or Play Store** means wrapping this same build with
+[Capacitor](https://capacitorjs.com): `npm i -D @capacitor/cli @capacitor/core`, `npx cap init`, point it at the
+`dist/` folder, then `npx cap add ios` / `npx cap add android` and open the native project in Xcode or Android
+Studio. The web app is the app — Capacitor adds the native shell, the store listing and the plugins (filesystem,
+share, and so on). That step needs a Mac with Xcode and the Android SDK, which is why it is not part of this
+repository's build.
+
 ## Ship it as a single application (one `.exe`)
 
 <img src="docs/app-icon.png" alt="QuandrionSlideMaster app icon" width="96" align="right" />

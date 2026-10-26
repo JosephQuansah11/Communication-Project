@@ -237,6 +237,10 @@ async function convertLegacy(buffer, originalName) {
  */
 const presence = createPresence({
   onIdle: () => {
+    // Only the packaged app lives and dies with its window: the dev server and the
+    // end-to-end runs keep going, so a reload or a closed tab is not fatal.
+    if (!STANDALONE || hasFlag('keep-running')) return;
+    if (process.env.QUANDRION_KEEP_RUNNING === '1' || process.env.SLIDESMITH_KEEP_RUNNING === '1') return;
     if (!shutdownRef.current) return;
     console.log('   The last window closed � stopping QuandrionSlideMaster.');
     shutdownRef.current();

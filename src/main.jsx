@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import './styles.css';
 import { startPresence } from './lib/presence.js';
+import { registerServiceWorker, watchInstallPrompt } from './lib/install.js';
 
 class Boundary extends React.Component {
   constructor(props) {
@@ -34,10 +35,13 @@ try {
     </Boundary>
   );
 } catch (error) {
+  console.error(error);
+}
 
 // The packaged app shuts itself down when the last window closes, so no invisible
 // process is left holding the executable open.
 startPresence();
 
-  console.error(error);
-}
+// Mobile: an installable app shell (service worker) and the install prompt.
+watchInstallPrompt();
+registerServiceWorker();

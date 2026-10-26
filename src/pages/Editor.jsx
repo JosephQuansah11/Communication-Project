@@ -8,6 +8,8 @@ import MediaLightbox from '../components/MediaLightbox.jsx';
 import PresentDialog from '../components/PresentDialog.jsx';
 import Ribbon from '../components/Ribbon.jsx';
 import RibbonPanel from '../components/RibbonPanel.jsx';
+import MobileBar from '../components/MobileBar.jsx';
+import { INSTALL_HINTS, currentInstallRoute, promptInstall } from '../lib/install.js';
 import ContextMenu from '../components/ContextMenu.jsx';
 import FindReplacePanel from '../components/FindReplacePanel.jsx';
 import DocumentTabs from '../components/DocumentTabs.jsx';
@@ -158,7 +160,12 @@ export default function Editor({ deckId, navigate }) {
   const [uploading, setUploading] = useState(false);
   const [animStep, setAnimStep] = useState(null);
   const [ribbonTab, setRibbonTab] = useState('home');
-  const [panels, setPanels] = useState({ rail: true, inspector: true, tabs: true });
+  const [panels, setPanels] = useState(() => {
+    // A phone starts with the canvas alone — the slide rail and the tools are sheets
+    // that the bottom bar opens — while a desktop window shows them side by side.
+    const narrow = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 820px)')?.matches === true;
+    return { rail: !narrow, inspector: !narrow, tabs: true };
+  });
   /**
    * The active tab's tools live in the right-hand column, above the inspector, so
    * the window has one toolbar row instead of two. The panel folds away when the
@@ -1818,6 +1825,24 @@ export default function Editor({ deckId, navigate }) {
     return setToast({ type: 'error', message: 'Allow pop-ups to start the show in its own window.' });
   };
 
+  /**
+   * Install the app on this device.
+   *
+   * Android and Chrome hand over a prompt to replay; iOS has none, so the toast
+   * explains the Share menu instead of pretending nothing happened.
+   */
+  const installApp = async () => {
+    const route = currentInstallRoute();
+    if (route === 'prompt') {
+      const accepted = await promptInstall();
+      return setToast({
+        type: accepted ? 'success' : 'info',
+        message: accepted ? 'Installing QuandrionSlideMaster…' : INSTALL_HINTS.prompt,
+      });
+    }
+    return setToast({ type: route === 'installed' ? 'success' : 'info', message: INSTALL_HINTS[route] });
+  };
+
   /** Every ribbon control funnels through here. */
   /** One radius for every corner â€” the ribbon's Corners field. */
   const setCornerRadius = (radius) => {
@@ -1842,6 +1867,8 @@ export default function Editor({ deckId, navigate }) {
         return importInput.current?.click();
       case 'file:duplicate':
         return duplicateDeck();
+      case 'file:install':
+        return installApp();
       case 'file:export':
         return exportDeckJson();
       case 'file:delete':
@@ -3240,6 +3267,18 @@ export default function Editor({ deckId, navigate }) {
           onAddShapeImage={addShapeImage}
         />
         </aside>
+
+        {/* Phone layout: the panels become sheets, so this bar opens them and keeps
+            the most-used actions under the thumb. Hidden on wide screens by CSS. */}
+        <MobileBar
+          railOpen={panels.rail}
+          inspectorOpen={panels.inspector}
+          onToggleRail={() => handleRibbonAction('toggleRail')}
+          onToggleInspector={() => handleRibbonAction('toggleInspector')}
+          onUndo={undo}
+          canUndo={canUndo}
+          onPresent={() => setPresentOpen(true)}
+        />
       </div>
 
       {tableTarget && (

@@ -167,9 +167,13 @@ function pngChunk(type, data) {
   return Buffer.concat([length, body, crc]);
 }
 
-/** PNG version of the icon — used as the README/preview image. */
-export function buildIconPng(size = 256) {
-  const pixels = render(size);
+/**
+ * Encode straight-alpha RGBA pixels as a PNG.
+ *
+ * Split out of `buildIconPng` so the mobile icons can be composited (flattened onto
+ * a colour) before they are encoded.
+ */
+export function encodePng(pixels, size) {
   const stride = size * 4;
   const raw = Buffer.alloc((stride + 1) * size);
   for (let y = 0; y < size; y += 1) {
@@ -187,6 +191,11 @@ export function buildIconPng(size = 256) {
     pngChunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
     pngChunk('IEND', Buffer.alloc(0)),
   ]);
+}
+
+/** PNG version of the icon — used as the README/preview image and the app icons. */
+export function buildIconPng(size = 256) {
+  return encodePng(render(size), size);
 }
 
 export function writeIconPng(target, size = 256) {

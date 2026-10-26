@@ -859,6 +859,41 @@ export default function EditorCanvas({
     return () => node.removeEventListener('wheel', onWheel);
   }, [onZoom, zoom]);
 
+  /**
+   * Two fingers zoom the canvas, the way every drawing app on a phone does. The
+   * wheel listener above covers a mouse; this covers touch, and it has to own the
+   * gesture so the browser does not zoom the whole page instead.
+   */
+  useEffect(() => {
+    const node = wrapRef.current;
+    if (!node || !onZoom) return undefined;
+    let start = null;
+    const spreadOf = (touches) =>
+      Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    const onStart = (event) => {
+      start = event.touches.length === 2 ? { spread: spreadOf(event.touches), zoom } : null;
+    };
+    const onMove = (event) => {
+      if (!start || event.touches.length !== 2) return;
+      event.preventDefault();
+      const ratio = spreadOf(event.touches) / (start.spread || 1);
+      onZoom(Math.min(3, Math.max(0.25, Math.round(start.zoom * ratio * 100) / 100)));
+    };
+    const onEnd = () => {
+      start = null;
+    };
+    node.addEventListener('touchstart', onStart, { passive: true });
+    node.addEventListener('touchmove', onMove, { passive: false });
+    node.addEventListener('touchend', onEnd, { passive: true });
+    node.addEventListener('touchcancel', onEnd, { passive: true });
+    return () => {
+      node.removeEventListener('touchstart', onStart);
+      node.removeEventListener('touchmove', onMove);
+      node.removeEventListener('touchend', onEnd);
+      node.removeEventListener('touchcancel', onEnd);
+    };
+  }, [onZoom, zoom]);
+
   const background = slide.background || {};
   const { container: bgContainer, layer: bgLayer } = backgroundStyles(background);
 
