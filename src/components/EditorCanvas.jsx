@@ -4,7 +4,16 @@ import Icon from './Icon.jsx';
 import TextToolbar from './TextToolbar.jsx';
 import { backgroundStyles } from '../lib/backgrounds.js';
 import { createCoalesce } from '../lib/throttle.js';
-import { boundsOf, idsInBox, offsetChanges, rotateAround, scaleToBounds, selectionElements } from '../lib/selection.js';
+import {
+  boundsOf,
+  idsInBox,
+  keepsProportions,
+  offsetChanges,
+  resizedBox,
+  rotateAround,
+  scaleToBounds,
+  selectionElements,
+} from '../lib/selection.js';
 import {
   LOCAL_BOX,
   cloneRings,
@@ -327,31 +336,14 @@ export default function EditorCanvas({
   const idsOf = (items) => items.map((item) => item.id);
 
   /**
-   * The box a resize-handle drag produces. Shared by a single object and by a
-   * whole selection, so a group grows out of its bounding box exactly the way one
-   * object grows out of its own.
+   * Corner handles keep the shape they started with on anything that would visibly
+   * distort — a picture, a video, a picture-filled shape — so growing an image never
+   * stretches it off its own proportions. Shift or Alt on a corner stretches freely,
+   * and a plain shape keeps resizing freely from every handle, as before.
    */
-  const resizedBox = (box, dir, dx, dy, keepRatio) => {
-    let { x, y, w, h } = box;
-    if (dir.includes('e')) w = Math.max(12, box.w + dx);
-    if (dir.includes('s')) h = Math.max(12, box.h + dy);
-    if (dir.includes('w')) {
-      w = Math.max(12, box.w - dx);
-      x = box.x + (box.w - w);
-    }
-    if (dir.includes('n')) {
-      h = Math.max(12, box.h - dy);
-      y = box.y + (box.h - h);
-    }
-    if (keepRatio && dir.length === 2) {
-      const ratio = box.w / box.h;
-      if (w / h > ratio) w = h * ratio;
-      else h = w / ratio;
-      if (dir.includes('w')) x = box.x + (box.w - w);
-      if (dir.includes('n')) y = box.y + (box.h - h);
-    }
-    return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
-  };
+  const resizeOptions = (element, event) => ({
+    lockAspect: event.shiftKey || event.altKey ? false : keepsProportions(element),
+  });
 
   // A pointer released anywhere — even outside the window — has to finish the
   // drag, which is what commits the previewed positions into the undo history.
@@ -410,6 +402,7 @@ export default function EditorCanvas({
       dir,
       startX: event.clientX,
       startY: event.clientY,
+      lockAspect: keepsProportions(element),
       element: { x: element.x, y: element.y, w: element.w, h: element.h, rotation: element.rotation || 0 },
     };
     setDragging(true);
@@ -428,6 +421,7 @@ export default function EditorCanvas({
       startX: event.clientX,
       startY: event.clientY,
       box: { ...groupBox },
+      lockAspect: selectedElements.length > 0 && selectedElements.every((item) => keepsProportions(item)),
       items: selectedElements.map((item) => ({ id: item.id, x: item.x, y: item.y, w: item.w, h: item.h })),
     };
     setDragging(true);
@@ -829,11 +823,11 @@ export default function EditorCanvas({
       return;
     }
     if (drag.mode === 'resizeGroup') {
-      const box = resizedBox(drag.box, drag.dir, dx, dy, input.shiftKey);
+      const box = resizedBox(drag.box, drag.dir, dx, dy, { lockAspect: drag.lockAspect });
       onPreviewSelection(scaleToBounds(drag.items, idsOf(drag.items), drag.box, box));
       return;
     }
-    onPreviewElement(selectedId, resizedBox(drag.element, drag.dir, dx, dy, input.shiftKey));
+    onPreviewElement(selectedId, resizedBox(drag.element, drag.dir, dx, dy, { lockAspect: drag.lockAspect && !input.shiftKey && !input.altKey }));
   };
 
   applyMoveRef.current = applyMove;

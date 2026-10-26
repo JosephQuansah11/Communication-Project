@@ -138,6 +138,62 @@ export function distributeOffsets(elements = [], ids = [], axis = 'h') {
  * Group resize: map every element of the selection from one bounding box onto
  * another, so the group keeps its proportions while being scaled.
  */
+/**
+ * The box a resize-handle drag produces.
+ *
+ * `dir` is any combination of `n`, `s`, `e`, `w` — `se` is the bottom-right corner,
+ * `e` the right edge. The opposite corner (or edge) stays put.
+ *
+ * `lockAspect` keeps the box at the ratio it started with, which is what a picture
+ * wants: growing a photo from a corner must not stretch it off its own proportions.
+ * The scale is the *average* of the two axis scales, which is the projection of the
+ * pointer onto the box's diagonal — the corner then follows the cursor closely while
+ * the shape stays true, instead of snapping to whichever axis grew more.
+ */
+export function resizedBox(box, dir, dx, dy, { lockAspect = false, min = 12 } = {}) {
+  let { x, y, w, h } = box;
+  if (dir.includes('e')) w = Math.max(min, box.w + dx);
+  if (dir.includes('s')) h = Math.max(min, box.h + dy);
+  if (dir.includes('w')) {
+    w = Math.max(min, box.w - dx);
+    x = box.x + (box.w - w);
+  }
+  if (dir.includes('n')) {
+    h = Math.max(min, box.h - dy);
+    y = box.y + (box.h - h);
+  }
+
+  // A corner drag is the only one that scales both axes, so it is the only one that
+  // can be locked without ignoring the pointer outright.
+  if (lockAspect && dir.length === 2 && box.w > 0 && box.h > 0) {
+    const scale = (w / box.w + h / box.h) / 2;
+    const ratio = box.w / box.h;
+    // Round the axis the pointer pushed and derive the other from the ratio, so the
+    // finished box is as close to the original shape as whole pixels allow.
+    if (w / box.w >= h / box.h) {
+      w = Math.max(min, Math.round(box.w * scale));
+      h = Math.max(min, Math.round(w / ratio));
+    } else {
+      h = Math.max(min, Math.round(box.h * scale));
+      w = Math.max(min, Math.round(h * ratio));
+    }
+    if (dir.includes('w')) x = box.x + (box.w - w);
+    if (dir.includes('n')) y = box.y + (box.h - h);
+  }
+
+  return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+}
+
+/**
+ * True when stretching an object would visibly distort it: a picture, a video, or a
+ * shape that is showing a picture. Their corners resize proportionally by default.
+ */
+export function keepsProportions(element) {
+  if (!element) return false;
+  if (element.type === 'image' || element.type === 'video') return true;
+  return Boolean(element.fillImage?.src);
+}
+
 export function scaleToBounds(elements = [], ids = [], from, to) {
   const list = selectionElements(elements, ids);
   if (!list.length || !from || !to) return {};

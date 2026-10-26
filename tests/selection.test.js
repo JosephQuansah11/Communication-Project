@@ -9,6 +9,8 @@ import {
   groupChanges,
   hasGroup,
   idsInBox,
+  keepsProportions,
+  resizedBox,
   matchSize,
   offsetChanges,
   pasteElements,
@@ -206,3 +208,48 @@ test('pasting clipboard elements rebuilds them beside the original', () => {
   assert.equal(pasteElements([null, undefined], 24).length, 0);
 });
 
+
+test('a picture keeps its proportions when it is enlarged from a corner', () => {
+  const photo = { x: 100, y: 100, w: 200, h: 100 };
+
+  // Free resize: the corner follows the pointer on both axes.
+  assert.deepEqual(resizedBox(photo, 'se', 50, 10, { lockAspect: false }), { x: 100, y: 100, w: 250, h: 110 });
+
+  // Locked: the ratio 2:1 survives, and the growth is the average of the two axis
+  // scales (1.25 and 1.1 -> 1.175), so the corner still follows the pointer.
+  const grown = resizedBox(photo, 'se', 50, 10, { lockAspect: true });
+  // Whole pixels cannot always hit the ratio exactly: 235/2 is 117.5.
+  assert.ok(Math.abs(grown.w / grown.h - 2) < 0.02);
+  assert.equal(grown.w, 235);
+  assert.equal(grown.h, 118);
+  assert.equal(grown.x, 100);
+  assert.equal(grown.y, 100);
+
+  // A corner drag that is purely diagonal grows by exactly that factor.
+  assert.deepEqual(resizedBox(photo, 'se', 100, 50, { lockAspect: true }), { x: 100, y: 100, w: 300, h: 150 });
+
+  // Dragging a corner inwards shrinks it without flipping the ratio.
+  const shrunk = resizedBox(photo, 'nw', 100, 50, { lockAspect: true });
+  assert.ok(Math.abs(shrunk.w / shrunk.h - 2) < 0.02);
+  assert.equal(shrunk.w, 100);
+  assert.equal(shrunk.h, 50);
+  // The opposite corner stayed where it was.
+  assert.equal(shrunk.x + shrunk.w, photo.x + photo.w);
+  assert.equal(shrunk.y + shrunk.h, photo.y + photo.h);
+
+  // An edge handle still stretches that edge only: locking is for corners.
+  assert.deepEqual(resizedBox(photo, 'e', 60, 0, { lockAspect: true }), { x: 100, y: 100, w: 260, h: 100 });
+
+  // Nothing collapses to nothing.
+  const tiny = resizedBox(photo, 'se', -1000, -1000, { lockAspect: true });
+  assert.ok(tiny.w >= 12 && tiny.h >= 12);
+});
+
+test('only things that would visibly distort keep their proportions', () => {
+  assert.equal(keepsProportions({ type: 'image', w: 100, h: 100 }), true);
+  assert.equal(keepsProportions({ type: 'video', w: 100, h: 100 }), true);
+  assert.equal(keepsProportions({ type: 'shape', fillImage: { src: '/uploads/a.png' } }), true);
+  assert.equal(keepsProportions({ type: 'shape', shape: 'rect' }), false);
+  assert.equal(keepsProportions({ type: 'text' }), false);
+  assert.equal(keepsProportions(null), false);
+});
