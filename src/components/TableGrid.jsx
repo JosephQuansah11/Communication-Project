@@ -61,7 +61,7 @@ export default function TableGrid({ table, className = '', style, onCellPointerD
                 backgroundColor: cellStyle.bg || (isHeader ? '#1e293b' : 'transparent'),
                 borderRight: '1px solid rgba(148,163,184,0.28)',
                 borderBottom: '1px solid rgba(148,163,184,0.28)',
-                outline: highlight === `${r},${c}` ? '2px solid #6366f1' : 'none',
+                outline: highlight === `${r},${c}` ? '2px solid var(--accent)' : 'none',
                 outlineOffset: '-2px',
                 minWidth: 0,
                 minHeight: 0,

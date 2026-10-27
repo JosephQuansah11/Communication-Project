@@ -19,7 +19,7 @@ const outDir = path.join(root, 'public', 'icons');
 fs.mkdirSync(outDir, { recursive: true });
 
 /** The accent colour the flat icons are painted on. */
-const BACKDROP = [99, 102, 241];
+const BACKDROP = [193, 121, 127];
 
 /**
  * Flatten straight-alpha pixels onto a solid colour.

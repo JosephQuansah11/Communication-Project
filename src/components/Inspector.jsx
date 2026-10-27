@@ -5,7 +5,7 @@ import { SHAPE_OPS } from '../lib/paths.js';
 import { TEXT_FITS } from '../lib/textmask.js';
 import { BACKGROUND_PRESETS, describeBackground, gradientCss, normalizePictureFill, similarBackgroundFor } from '../lib/backgrounds.js';
 import { MOTION_BACKGROUNDS, motionLabel, normalizeBackgroundVideo } from '../lib/motionBackgrounds.js';
-import { MotionScene } from './BackgroundMedia.jsx';
+import { MotionScene } from './motionScenes.jsx';
 import {
   ANIMATION_KINDS,
   DIRECTION_LABELS,
@@ -620,7 +620,7 @@ export default function Inspector({
                   }
                 >
                   <span className={`motion-preview motion-${scene.id}`}>
-                    <MotionScene id={scene.id} />
+                    <MotionScene id={scene.id} width={640} height={360} />
                   </span>
                   {scene.label}
                 </button>

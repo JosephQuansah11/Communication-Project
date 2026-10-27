@@ -953,7 +953,7 @@ export default function EditorCanvas({
           >
             {bgLayer && <div className="canvas-bg-image" style={bgLayer} />}
             {/* The looping scene or video the slide wears, under its objects. */}
-            <BackgroundMedia background={slide.background} />
+            <BackgroundMedia background={slide.background} width={deck.width} height={deck.height} />
             {slide.elements?.length === 0 && (
               <div className="empty-slide-hint">
                 <Icon name="sparkle" size={31} />

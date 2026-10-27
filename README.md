@@ -173,9 +173,18 @@ node e2e-find-replace.mjs     # find & replace across the deck
 node e2e-controls-audit.mjs   # clicks every ribbon control and reports any error
 ```
 
+The motion scenes honour `prefers-reduced-motion`, and headless Chrome reports *reduce* by default — the browser
+suites ask for normal motion with `Emulation.setEmulatedMedia` before they measure anything that moves.
+
 ## What is implemented
 
 ### Window & ribbon
+- **The look is one palette, set in `:root`** (`src/styles.css`): warm charcoal panels on a mauve-brown ground, cream
+  type and a dusty-rose accent, with the same channels repeated as `--accent-rgb` / `--bg-rgb` for the many `rgba()`
+  tints. Everything in the window reads from those variables — including the app icon (`scripts/make-icon.mjs`,
+  `npm run icons`) and the installable app's theme colour (`index.html`, `public/manifest.webmanifest`) — so the
+  window, the icon and the phone's status bar all match. Slide *content* is separate: the background presets, the
+  default text colour and the shape fills are the deck's own choices and are deliberately not tied to the UI theme.
 - The editor is a **WPS-style window** with **one toolbar row**: *File*, the quick-access cluster, the tab strip
   (*Home / Insert / Design / Transitions / Animations / Slide Show / Review / View / Tools*) and the deck title with
   *Present*.
@@ -343,10 +352,18 @@ The inspector shows a **system** badge and the editor footer shows the active fo
   outputs, which drive it off the same slide index so they never drift apart. The catalog
   (`shared/transitions.js`) holds **None**, **Fade**, **Slide** (pushes the old slide out), **Cover** (slides in
   over it), **Open door** (opens out from the centre line), **Slice** (arrives in four bands, one after another),
-  **Burn away** (the old slide burns off the bottom up under a sweeping ember band) and **Sparkle** (the slide
+  **Burn away** (a line of fire crosses the old slide and eats it away) and **Sparkle** (the slide
   lands behind a burst of points). Each entry's duration is handed to CSS as `--transition-ms`, so the animation
   and the catalog can never disagree, and *Apply to all* puts the chosen one on every slide. Imported decks arrive
   on **Fade** — the importer does not read `<p:transition>` yet.
+- **Burn away is a fire, not a colour wash.** A ragged front crosses the old slide from the left, and everything
+  rides that front: the slide is clipped along a nine-point edge (equal point counts, or `clip-path` will not
+  interpolate), char and ash smear out behind it, a white-hot line with amber either side burns along it, tongues of
+  flame flare and shrink as the fire passes, and sparks rise off it and burn out. The band, the clip and the sparks
+  all use the transition's own duration *and* the same easing curve, so the fire is always exactly on the edge of
+  what is left of the old slide. Only the halo is blended (`screen`, for a dark slide); the fire itself is painted in
+  solid colours, because a screen blend on a pale slide would disappear. The clip, the fire, the flames and the
+  sparks are all checked against the stylesheet in `tests/transitions.test.js`.
 - **Set Up Show** in the present dialog: pick the display, turn **presenter view** on or off, and build a
   **custom show** (tick the slides to play — the deck itself is never changed).
   - **Presenter view on** (default): the console (notes, timer, annotations, navigator, live panel) opens on your
@@ -386,14 +403,30 @@ The inspector shows a **system** badge and the editor footer shows the active fo
 - Slide backgrounds — solid colour, gradient and images — always paint **edge-to-edge across the display**;
   slide content is letterboxed (or fills the screen with the Fill toggle) without exposing empty bars.
 - **A slide can also wear a moving background**, in the inspector under *Background*:
-  - **Motion backgrounds** (`src/lib/motionBackgrounds.js`, drawn by `src/components/BackgroundMedia.jsx`) are
-    looping scenes written in SVG and animated by CSS — **Bouncing ball** (crosses the floor, squashing as it
-    lands), **Falling coin** (coins spin and drop past the slide), **Open book** (leaves turn over the spine),
-    **Playing keyboard** (keys press themselves in a rhythm) and **Jumping microphone** (drops in, bounces,
-    settles). Nothing to download and no decoder: they repeat for as long as the slide is on screen, at an
-    opacity, blur and **speed** you set (the speed is handed to CSS as `--motion-speed`, which every scene divides
-    its own pace by). Each scene's keyframes live in `src/styles.css`; the unit tests read that stylesheet to prove
-    every scene still has keyframes, that they all say `infinite`, and that they all answer the speed control.
+  - **Motion backgrounds** (`src/lib/motionBackgrounds.js`, drawn by `src/components/motionScenes.jsx`) are looping
+    scenes written in SVG. Nothing to download and no decoder: they repeat for as long as the slide is on screen, at
+    an opacity, blur and **speed** you set (the speed is handed to CSS as `--motion-speed`, which every scene divides
+    its own pace by). There are five:
+    - **Bouncing ball** and **Falling coin** are **simulated**, not keyframed (`src/lib/motionPhysics.js`). The ball
+      is thrown in from a corner and falls under gravity — it accelerates, bounces off the slide's *own edges*
+      (whatever size the deck is), loses a little height on every bounce, squashes as it lands, rolls to a stop,
+      lies still for **two seconds** and is thrown again. The shadow it casts shrinks and fades with height, which is
+      what makes the arc readable. Its bounce stops mattering below a threshold, so it settles cleanly instead of
+      buzzing in the last few millimetres.
+    - **Falling coin** throws coins from **one hand** at the lower left, one after another, each with its own impulse
+      and its own rate of flipping. Which face lands up is not chosen in advance: the coin is drawn by scaling it
+      with `cos(flip)` (so it goes edge-on and back), and when it reaches the floor its flip is snapped to the nearest
+      whole number of half-turns — an **odd** number lands on the other side. A coin that flipped slowly settles
+      heads where a fast one settles tails, and both turn up in a handful of throws.
+    - **Open book**, **Playing keyboard** and **Jumping microphone** are drawn in SVG and animated by CSS
+      (`src/styles.css`) — leaves turning over the spine, keys pressing themselves in a rhythm, a microphone dropping
+      in and settling.
+    - The maths is checked in `tests/motion-physics.test.js`: gravity against the closed-form ½gt², energy falling at
+      every impact, each bounce lower than the last, the ball never leaving the slide at three different deck sizes,
+      the two-second rest and the restart, the landing face against the parity of the half-turns, and that the face
+      the maths picks is the face the renderer shows. `tests/motion-backgrounds.test.js` reads the stylesheet and the
+      scene registry to prove every scene still has the driver it claims (keyframes for the CSS ones, no CSS
+      animation fighting the physics on the simulated ones).
   - **Video backgrounds**: upload a clip (**Upload a looping video**) or paste an mp4/webm URL. It plays **muted on
     a loop**, inline, which is the only kind of autoplay a browser allows without asking, and it covers the slide
     the way the Fit control says (cover / contain / stretch), with its own opacity and blur. An uploaded clip is
@@ -402,8 +435,10 @@ The inspector shows a **system** badge and the editor footer shows the active fo
     and the field goes back to what the slide is actually wearing.
   - Both layers sit **above the colour/gradient/picture and below the objects**, so slide content stays readable,
     and they show up everywhere the slide does: the editor canvas, the presenter window and the audience outputs.
-    In the **thumbnail rail** they are held still (the scene is paused and the video is not decoded), so a long
-    deck does not run a scene per slide.
+    In the **thumbnail rail** they are held still — the scene is paused and the video is not decoded — so a long deck
+    does not run a simulation per slide.
+  - Readers who ask for **less movement** (`prefers-reduced-motion`) get a still slide: the CSS scenes stop and the
+    simulated ones never start.
 - Click images/video/audio to open an expandable viewer: images zoom (25–600%, wheel, pan), video plays large,
   audio gets a full player.
 
@@ -607,8 +642,8 @@ src/
                 BackgroundMedia (looping scene/video slide backgrounds)…
   hooks/        Undo/redo deck history, open document tabs (localStorage), workspace picture
   lib/          API client, element factories, rich-text sanitizer, backgrounds/picture fills, animations,
-                motion backgrounds (looping scenes + video backgrounds), annotations, shapes, fonts, ribbon model,
-                slide layouts
+                motion backgrounds (looping scenes + video backgrounds), motion physics (the ball and the coins),
+                annotations, shapes, fonts, ribbon model, slide layouts
 scripts/
   build-exe.mjs     Bundles the server, makes the SEA blob and injects it into the Node runtime
   embed-client.mjs  Inlines dist/ into server/generated/client-assets.js
@@ -661,7 +696,8 @@ tests/          Node test suites for formulas, PPTX import, rich text, the ribbo
   imported deck's `<p:animEffect>`/`<p:transition>` presets are still mapped onto the closest CSS effect — Dynamic
   itself is authored in the editor, not imported.
 - Motion scenes are drawn, not filmed: they are simple SVG shapes on purpose, so they read as a background instead
-  of competing with the words on the slide.
+  of competing with the words on the slide. The ball and the coins are simulated on the main thread, so a slide with
+  one of them is doing a little maths every frame — the rail pauses them for exactly that reason.
 - The app has no authentication. It is intended for local/trusted-network use, with decks and uploads stored on
   the server.
 

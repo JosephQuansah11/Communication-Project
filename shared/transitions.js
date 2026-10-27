@@ -17,7 +17,7 @@ export const TRANSITIONS = [
   { id: 'cover', label: 'Cover', duration: 800, hint: 'The slide slides in from the right and covers the last one.' },
   { id: 'openDoor', label: 'Open door', duration: 950, hint: 'The slide opens out from the centre line, like double doors.' },
   { id: 'slice', label: 'Slice', duration: 1000, hint: 'The slide arrives in horizontal slices, one band after another.' },
-  { id: 'burnAway', label: 'Burn away', duration: 1100, hint: 'The last slide burns off the screen from the bottom up.' },
+  { id: 'burnAway', label: 'Burn away', duration: 1500, hint: 'A line of fire crosses the last slide from the left and eats it away, leaving char and ash behind.' },
   { id: 'sparkle', label: 'Sparkle', duration: 1100, hint: 'The slide lands behind a burst of sparkling points.' },
 ];
 

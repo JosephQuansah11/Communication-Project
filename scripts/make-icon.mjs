@@ -16,10 +16,11 @@ const SIZES = [256, 64, 32, 16];
 export const ICON_SIZES = SIZES;
 const SAMPLES = 4; // 4x4 supersampling per pixel
 
-const ACCENT = [99, 102, 241];
-const CYAN = [34, 211, 238];
-const INK = [67, 56, 202];
-const WHITE = [255, 255, 255];
+/* The window palette: a dusty rose accent warming into cream, with warm charcoal ink. */
+const ACCENT = [193, 121, 127];
+const CYAN = [242, 222, 214];
+const INK = [106, 66, 70];
+const WHITE = [246, 236, 229];
 
 function insideRoundRect(px, py, x0, y0, x1, y1, r) {
   const cx = Math.min(Math.max(px, x0 + r), x1 - r);

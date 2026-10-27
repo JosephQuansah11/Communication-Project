@@ -65,7 +65,7 @@ export default function Stage({
         }}
       />
       {/* The looping scene or video behind the slide's own objects. */}
-      <BackgroundMedia background={background} />
+      <BackgroundMedia background={background} width={deck?.width} height={deck?.height} />
       {scale > 0 && (
         <div
           className="stage-content"

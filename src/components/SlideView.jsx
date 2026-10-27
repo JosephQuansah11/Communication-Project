@@ -49,7 +49,7 @@ export default function SlideView({
         {!hideBackground && layer && <div className="slide-background-image" style={layer} />}
         {/* A motion scene or a looping video sits above the picture and below the
             objects, so slide content always stays readable on top of it. */}
-        {!hideBackground && <BackgroundMedia background={background} paused={preview} />}
+        {!hideBackground && <BackgroundMedia background={background} width={width} height={height} paused={preview} />}
         {slide.elements?.map((element) => (
           <ElementView
             key={element.id}

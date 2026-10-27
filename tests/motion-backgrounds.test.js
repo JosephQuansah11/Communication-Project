@@ -1,10 +1,11 @@
 /**
  * Looping motion backgrounds and video backgrounds.
  *
- * The scenes are SVG drawn by CSS, so the stylesheet is half of the feature: these
- * checks read it to prove every scene has keyframes that repeat forever, that the
- * speed control reaches them, and that nothing points at a scene or a video source
- * the app cannot actually show.
+ * Every scene declares how it moves: three are drawn and animated by CSS, and two run
+ * on the physics in `lib/motionPhysics.js` (a ball that bounces off the slide's own
+ * edges, coins thrown from one hand). These checks read the stylesheet and the scene
+ * registry to prove that whichever driver a scene names is really there — that is the
+ * silent-break link between the catalog and what actually moves.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -23,6 +24,11 @@ import {
 } from '../src/lib/motionBackgrounds.js';
 
 const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+const scenes = readFileSync(new URL('../src/components/motionScenes.jsx', import.meta.url), 'utf8');
+
+/** The scenes CSS animates on its own, and the ones that need physics. */
+const CSS_SCENES = ['openBook', 'keyboard', 'microphone'];
+const PHYSICS_SCENES = ['bouncingBall', 'fallingCoin'];
 
 test('the library offers the scenes the editor shows', () => {
   const ids = MOTION_BACKGROUNDS.map((scene) => scene.id);
@@ -37,23 +43,25 @@ test('the library offers the scenes the editor shows', () => {
   assert.equal(motionLabel('nonsense'), 'nonsense');
 });
 
-test('every scene has keyframes that repeat forever', () => {
-  for (const id of MOTION_IDS) {
+test('every scene the stylesheet animates has keyframes that repeat forever', () => {
+  for (const id of CSS_SCENES) {
     assert.ok(new RegExp(`@keyframes motion-${id}-`).test(css), `styles.css defines keyframes for ${id}`);
     assert.ok(new RegExp(`\\.motion-${id}\\b`).test(css), `styles.css styles .motion-${id}`);
+    assert.ok(new RegExp(`\\b${id}:\\s*\\w+`).test(scenes), `motionScenes.jsx registers ${id}`);
   }
   // A background scene has to loop: that is the whole point of it.
   const uses = [...css.matchAll(/animation:\s*(motion-[\w-]+)[^;]*;/g)];
-  assert.ok(uses.length >= MOTION_IDS.length, `the scenes are animated (${uses.length} animations)`);
+  assert.ok(uses.length >= CSS_SCENES.length, `the scenes are animated (${uses.length} animations)`);
   for (const [declaration, name] of uses) {
     assert.match(declaration, /infinite/, `${name} loops forever`);
     assert.ok(new RegExp(`@keyframes ${name}\\b`).test(css), `@keyframes ${name} exists`);
   }
 });
 
-test('every scene answers the speed control', () => {
+test('every scene CSS animates answers the speed control', () => {
   // The renderer sets `--motion-speed` inline; each animation divides its pace by it.
   const uses = [...css.matchAll(/animation:\s*motion-[\w-]+[^;]*;/g)].map((match) => match[0]);
+  assert.ok(uses.length, 'there is something to check');
   for (const declaration of uses) {
     assert.match(declaration, /var\(--motion-speed/, declaration);
   }
@@ -61,6 +69,30 @@ test('every scene answers the speed control', () => {
   assert.equal(motionLoopSeconds(2.4, 2), 1.2);
   assert.equal(motionLoopSeconds(2.4, 0.5), 4.8);
 });
+
+test('the physics scenes are the ones that need stepping, and they get it', () => {
+  for (const id of PHYSICS_SCENES) {
+    assert.ok(new RegExp(`\\.motion-${id}\\b`).test(css), `styles.css paints .motion-${id}`);
+    assert.ok(new RegExp(`\\b${id}:\\s*\\w+`).test(scenes), `motionScenes.jsx registers ${id}`);
+  }
+  // The ball and the coins are moved by the simulation, not by a CSS animation, so
+  // the stylesheet must NOT be animating them — a leftover `animation:` would fight
+  // the physics for the same transform.
+  for (const id of PHYSICS_SCENES) {
+    const rules = [...css.matchAll(new RegExp(`\\.motion-${id}[^{]*\\{[^}]*\\}`, 'g'))].map((match) => match[0]);
+    assert.ok(rules.length, `${id} is painted`);
+    for (const rule of rules) {
+      assert.ok(!/animation:/.test(rule), `${id} is left to the physics: ${rule.split('{')[0].trim()}`);
+    }
+  }
+  // And the scene file really does hand them to the loop.
+  assert.match(scenes, /usePhysicsLoop\(/, 'the scenes run a frame loop');
+  assert.match(scenes, /stepBall\(/, 'the ball is stepped');
+  assert.match(scenes, /stepCoin\(/, 'the coins are stepped');
+  assert.match(scenes, /createBall\(/, 'the ball is thrown');
+  assert.match(scenes, /createCoin\(/, 'the coins are thrown');
+});
+
 
 test('a scene is sanitized into something showable', () => {
   const scene = normalizeMotionBackground({ id: 'openBook', opacity: 0.7, blur: 4, speed: 1.5 });

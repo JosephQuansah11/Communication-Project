@@ -1,6 +1,6 @@
 import Icon from './Icon.jsx';
 
-const ACCENTS = ['#6366f1', '#0ea5e9', '#14b8a6', '#f97316', '#a855f7', '#ec4899', '#22c55e', '#f59e0b'];
+const ACCENTS = ['#c1797f', '#b8825f', '#a4646a', '#cf9276', '#8f6f7d', '#9fc6c0', '#a8c69c', '#e8b978'];
 
 function accentFor(id = '') {
   let hash = 0;
