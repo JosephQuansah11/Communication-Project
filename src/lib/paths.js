@@ -18,7 +18,7 @@
  * Everything here is dependency free (no DOM) so it can be unit tested in Node.
  */
 
-import { SHAPE_POINTS } from './shapes.js';
+import { SHAPE_MAP, SHAPE_POINTS } from './shapes.js';
 
 /** Sampling used when a curve has to become a polygon (boolean ops, areas). */
 export const CURVE_STEPS = 24;
@@ -72,6 +72,9 @@ export function shapeLocalRings(element = {}) {
     return mapRings(rings, (point) => ({ x: (point.x / LOCAL_BOX) * w, y: (point.y / LOCAL_BOX) * h }));
   }
   if (shape === 'ellipse') return ellipseRings(0, 0, w, h);
+  // A blob (the water drop) has elliptical corners of its own rather than a point table.
+  const blob = SHAPE_MAP[shape]?.blob;
+  if (blob) return blobRings(0, 0, w, h, blob);
   const points = SHAPE_POINTS[shape];
   if (!points) return rectRings(0, 0, w, h, cornersOf(element));
   const rings = polygonRings(points, 0, 0, w, h);
@@ -369,6 +372,38 @@ export function rectRings(x, y, w, h, corners = 0) {
   corner(x1, y, x1 - tr, y, x1, y + tr, tr);
   corner(x1, y1, x1, y1 - br, x1 - br, y1, br);
   corner(x, y1, x + bl, y1, x, y1 - bl, bl);
+  return [{ closed: true, points }];
+}
+
+/**
+ * A blob: a rectangle whose four corners are elliptical, each with its own horizontal and
+ * vertical radius, given as fractions of the box.
+ *
+ * This is the shape CSS draws with `border-radius: a b c d / e f g h`, and it is built the
+ * same way `rectRings` builds a rounded rectangle — one bezier per corner, entered along
+ * one edge and left along the next — except that a corner's two radii are independent, so
+ * the arc is an ellipse rather than a circle. When an edge's radii add up to the whole
+ * edge there is no straight part left and the outline is four arcs meeting at the middle
+ * of each side: that is what a water drop is.
+ */
+export function blobRings(x, y, w, h, radii = { rx: [0.38, 0.62, 0.46, 0.54], ry: [0.46, 0.51, 0.49, 0.54] }) {
+  const x1 = x + w;
+  const y1 = y + h;
+  const [tlx, trx, brx, blx] = radii.rx.map((value) => Math.max(0, value) * w);
+  const [tly, tryy, bry, bly] = radii.ry.map((value) => Math.max(0, value) * h);
+  const points = [];
+  const corner = (cx, cy, fromX, fromY, toX, toY) => {
+    if (!Math.abs(toX - fromX) && !Math.abs(toY - fromY)) {
+      points.push({ x: fromX, y: fromY });
+      return;
+    }
+    points.push({ x: fromX, y: fromY, out: { x: fromX + (cx - fromX) * KAPPA, y: fromY + (cy - fromY) * KAPPA } });
+    points.push({ x: toX, y: toY, in: { x: toX + (cx - toX) * KAPPA, y: toY + (cy - toY) * KAPPA } });
+  };
+  corner(x, y, x, y + tly, x + tlx, y);
+  corner(x1, y, x1 - trx, y, x1, y + tryy);
+  corner(x1, y1, x1, y1 - bry, x1 - brx, y1);
+  corner(x, y1, x + blx, y1, x, y1 - bly);
   return [{ closed: true, points }];
 }
 

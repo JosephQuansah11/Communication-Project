@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
-import { SHAPES, SHAPE_POINTS } from '../lib/shapes.js';
+import { SHAPES, SHAPE_MAP, SHAPE_POINTS } from '../lib/shapes.js';
 import { SHAPE_OPS } from '../lib/paths.js';
 import { TEXT_FITS } from '../lib/textmask.js';
 import { BACKGROUND_PRESETS, describeBackground, gradientCss, normalizePictureFill, similarBackgroundFor } from '../lib/backgrounds.js';
@@ -122,6 +122,7 @@ function ShapeGeometry({ element, patch, onEditPoints, onToPath }) {
   const isRect = !element.shape || kind === 'rect' || kind === 'roundRect';
   const isPath = kind === 'path';
   const isPolygon = Boolean(SHAPE_POINTS[kind]);
+  const isBlob = Boolean(SHAPE_MAP[kind]?.blob);
   const corners = element.corners || {
     tl: element.radius || 0,
     tr: element.radius || 0,
@@ -133,6 +134,30 @@ function ShapeGeometry({ element, patch, onEditPoints, onToPath }) {
 
   return (
     <>
+      {isBlob && (
+        <div className="field">
+          <label>
+            Water drop
+            <span className="field-value">{element.wobble === false ? 'still' : 'wobbling'}</span>
+          </label>
+          <Toggle
+            label="Wobble"
+            hint="Breathe between the drop and a circle"
+            checked={element.wobble !== false}
+            onChange={(wobble) => patch({ wobble })}
+          />
+          <Toggle
+            label="Shine"
+            hint="The highlights that make it read as water"
+            checked={element.shine !== false}
+            onChange={(shine) => patch({ shine })}
+          />
+          <small className="field-hint">
+            The outline is four elliptical corners, so it has no straight sides at all. Text put on the drop is
+            clipped to it, and follows the wobble.
+          </small>
+        </div>
+      )}
       {isRect && (
         <div className="field">
           <label>

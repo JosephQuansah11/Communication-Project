@@ -3510,6 +3510,29 @@ input[type="range"]::-webkit-slider-thumb {
   50% { opacity: 1; }
 }
 
+/* A water drop's shine: two soft highlights on the shoulder, the way water catches the
+   light. They are painted over the fill, so the drop reads as a bead rather than a blob. */
+.shape-shine ellipse {
+  fill: #ffffff;
+  opacity: 0.34;
+}
+.shape-shine ellipse:last-child {
+  opacity: 0.22;
+}
+
+/* The text a blob holds breathes with it: the clip's `border-radius` walks between the
+   drop's own radii and a circle, on the same six-second loop the shape's outline is
+   morphed on, so the words never leave the water. */
+@keyframes drop-wobble {
+  0% { border-radius: 38% 62% 46% 54% / 46% 51% 49% 54%; }
+  50% { border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%; }
+  100% { border-radius: 38% 62% 46% 54% / 46% 51% 49% 54%; }
+}
+.shape-clip-blob { will-change: border-radius; }
+@media (prefers-reduced-motion: reduce) {
+  .shape-clip-blob { animation: none !important; }
+}
+
 /* Presenter step counter */
 .present-step-chip {
   display: inline-flex;
