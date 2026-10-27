@@ -264,43 +264,161 @@ function FallingCoinScene({ width, height, paused }) {
  * The scenes CSS animates on its own
  * ----------------------------------------------------------------------- */
 
+/**
+ * The bible: it stands closed under a shaft of light, then opens — the cover swings
+ * back and its pages turn over one after another — before closing again for the next
+ * pass. It is all one CSS timeline (`--book-cycle` in styles.css), so every part of the
+ * sequence stays in step and the whole thing loops.
+ *
+ * The book is drawn flat and given depth with `rotateY` about the spine, which is what
+ * makes the cover and the leaves swing rather than slide.
+ */
 function OpenBookScene({ width, height }) {
   const cx = width / 2;
-  const top = height * 0.56;
-  const spread = Math.min(width * 0.32, 380);
-  const lift = height * 0.13;
-  const depth = height * 0.1;
-  const leftPage = `M ${cx} ${top} L ${cx - spread} ${top + lift} L ${cx - spread} ${top + lift + depth} L ${cx} ${top + depth} Z`;
-  const rightPage = `M ${cx} ${top} L ${cx + spread} ${top + lift} L ${cx + spread} ${top + lift + depth} L ${cx} ${top + depth} Z`;
-  const leafOrigin = `${cx}px ${top + lift * 0.5}px`;
+  const floor = height * 0.84;
+  const bw = Math.min(width * 0.26, 330);
+  const bh = bw * 1.32;
+  const spine = bw * 0.13;
+  const left = cx - bw / 2;
+  const right = cx + bw / 2;
+  const top = floor - bh;
+  const hinge = `${left}px ${top + bh / 2}px`;
+  const inside = { transformOrigin: hinge };
+  const crossY = top + bh * 0.42;
+  const crossW = bw * 0.3;
+  const crossH = bh * 0.28;
+  const armW = bw * 0.075;
+  const lines = [0.3, 0.36, 0.42, 0.48, 0.54, 0.6, 0.66];
+
   return (
     <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+      {/* The shaft of light the book stands in: a broad cone with beams inside it. */}
+      <path
+        className="mb-book-cone"
+        d={`M ${cx - bw * 0.5} ${top - bh * 1.9} L ${cx + bw * 0.5} ${top - bh * 1.9} L ${cx + bw * 1.15} ${floor} L ${cx - bw * 1.15} ${floor} Z`}
+      />
+      <g className="mb-book-rays">
+        {[-1, -0.74, -0.5, -0.24, 0.02, 0.28, 0.54, 0.78, 1].map((lean, index) => (
+          <path
+            key={lean}
+            className="mb-book-ray"
+            d={`M ${cx + lean * 40} ${top - bh * 1.9} L ${cx + lean * 120 - 40} ${floor} L ${cx + lean * 120 + 40} ${floor} Z`}
+            style={{ animationDelay: `${index * 320}ms`, '--ray': 0.3 + (index % 4) * 0.16 }}
+          />
+        ))}
+      </g>
+      <ellipse className="mb-book-glow" cx={cx} cy={floor + 6} rx={bw * 1.15} ry={bh * 0.09} />
+      <ellipse className="mb-book-shadow" cx={cx} cy={floor + 4} rx={bw * 0.56} ry={bh * 0.035} />
       <g className="mb-book">
-        <path
-          className="mb-book-cover"
-          d={`M ${cx - spread} ${top + lift} L ${cx} ${top} L ${cx + spread} ${top + lift} L ${cx + spread} ${top + lift + depth * 1.2} L ${cx} ${top + depth * 1.2} L ${cx - spread} ${top + lift + depth * 1.2} Z`}
-        />
-        <path className="mb-book-page" d={leftPage} />
-        <path className="mb-book-page" d={rightPage} />
-        {[0.035, 0.065, 0.095].map((offset) => (
-          <g key={offset}>
-            <path
-              className="mb-book-line"
-              d={`M ${cx - spread * 0.86} ${top + lift * 0.9 + height * offset} L ${cx - spread * 0.16} ${top + lift * 0.24 + height * offset}`}
-            />
-            <path
-              className="mb-book-line"
-              d={`M ${cx + spread * 0.16} ${top + lift * 0.24 + height * offset} L ${cx + spread * 0.86} ${top + lift * 0.9 + height * offset}`}
-            />
+        {/* The page block: what is left under the cover once it swings open. */}
+        <rect className="mb-book-block" x={left} y={top} width={bw} height={bh} rx={bw * 0.02} />
+        <rect className="mb-book-foreedge" x={right - bw * 0.045} y={top} width={bw * 0.045} height={bh} rx={bw * 0.01} />
+        {lines.map((line) => (
+          <path
+            key={line}
+            className="mb-book-line"
+            d={`M ${left + bw * 0.14} ${top + bh * line} L ${right - bw * 0.14} ${top + bh * line}`}
+          />
+        ))}
+        {/* The inside face of the cover. It is drawn *before* the leaves, because a page
+            that has been turned over comes to rest on top of it. */}
+        <g className="mb-book-inside" style={inside}>
+          <rect className="mb-book-pastedown" x={left} y={top} width={bw} height={bh} rx={bw * 0.03} />
+          <rect
+            className="mb-book-pastedown-rule"
+            x={left + bw * 0.08}
+            y={top + bh * 0.07}
+            width={bw * 0.84}
+            height={bh * 0.86}
+            rx={bw * 0.02}
+          />
+        </g>
+        {/* The pages that turn, one after the other, hinged at the spine. The one drawn
+            last is the one on top, so the turn order runs from the top of the stack down. */}
+        {['a', 'b', 'c'].map((leaf) => (
+          <g key={leaf} className={`mb-book-leaf mb-book-leaf-${leaf}`} style={inside}>
+            <rect className="mb-book-page" x={left} y={top} width={bw} height={bh} rx={bw * 0.02} />
+            {lines.slice(0, 6).map((line) => (
+              <path
+                key={line}
+                className="mb-book-line"
+                d={`M ${left + bw * 0.14} ${top + bh * (line + 0.02)} L ${right - bw * 0.16} ${top + bh * line}`}
+              />
+            ))}
           </g>
         ))}
-        <path className="mb-book-spine" d={`M ${cx} ${top} L ${cx} ${top + depth}`} />
-        <g className="mb-book-leaf" style={{ transformOrigin: leafOrigin, animationDelay: '0.5s' }}>
-          <path d={leftPage} />
+        {/* The cover itself: leather, a gold rule and a cross, drawn over the leaves so
+            the closed book hides them, and faded out as it passes edge-on. */}
+        <g className="mb-book-front" style={inside}>
+          <rect className="mb-book-cover-leather" x={left} y={top} width={bw} height={bh} rx={bw * 0.03} />
+          <rect
+            className="mb-book-cover-panel"
+            x={left + bw * 0.05}
+            y={top + bh * 0.045}
+            width={bw * 0.9}
+            height={bh * 0.91}
+            rx={bw * 0.025}
+          />
+          <rect
+            className="mb-book-cover-rule"
+            x={left + bw * 0.085}
+            y={top + bh * 0.075}
+            width={bw * 0.83}
+            height={bh * 0.85}
+            rx={bw * 0.02}
+          />
+          <path
+            className="mb-book-cross"
+            d={`M ${cx - armW / 2} ${crossY - crossH / 2} L ${cx + armW / 2} ${crossY - crossH / 2} L ${cx + armW / 2} ${crossY - armW / 2}
+                L ${cx + crossW / 2} ${crossY - armW / 2} L ${cx + crossW / 2} ${crossY + armW / 2} L ${cx + armW / 2} ${crossY + armW / 2}
+                L ${cx + armW / 2} ${crossY + crossH / 2} L ${cx - armW / 2} ${crossY + crossH / 2} L ${cx - armW / 2} ${crossY + armW / 2}
+                L ${cx - crossW / 2} ${crossY + armW / 2} L ${cx - crossW / 2} ${crossY - armW / 2} L ${cx - armW / 2} ${crossY - armW / 2} Z`}
+          />
+          {/* Flared ends and a gem at the crossing, the way a bible is tooled. */}
+          <circle className="mb-book-cross-tip" cx={cx} cy={crossY - crossH / 2} r={armW * 0.52} />
+          <circle className="mb-book-cross-tip" cx={cx} cy={crossY + crossH / 2} r={armW * 0.52} />
+          <circle className="mb-book-cross-tip" cx={cx - crossW / 2} cy={crossY} r={armW * 0.52} />
+          <circle className="mb-book-cross-tip" cx={cx + crossW / 2} cy={crossY} r={armW * 0.52} />
+          <circle className="mb-book-cross-gem" cx={cx} cy={crossY} r={armW * 0.62} />
         </g>
-        <g className="mb-book-leaf" style={{ transformOrigin: leafOrigin, animationDelay: '1.6s' }}>
-          <path d={rightPage} />
+        {/* The spine stays put, and stays in front: it is the edge nearest the viewer. */}
+        <g className="mb-book-spine">
+          <rect x={left - spine} y={top + bh * 0.012} width={spine} height={bh * 0.976} rx={bw * 0.02} />
+          {[0.2, 0.5, 0.8].map((band) => (
+            <rect
+              key={band}
+              className="mb-book-band"
+              x={left - spine}
+              y={top + bh * band}
+              width={spine}
+              height={bh * 0.022}
+            />
+          ))}
+          <rect
+            className="mb-book-label"
+            x={left - spine * 0.86}
+            y={top + bh * 0.34}
+            width={spine * 0.72}
+            height={bh * 0.16}
+            rx={bw * 0.012}
+          />
         </g>
+      </g>
+      {/* Dust in the light. */}
+      <g className="mb-book-dust">
+        {[
+          [0.3, 0.06, 1.1], [0.42, 0.2, 0.8], [0.56, 0.1, 1.3], [0.66, 0.26, 0.9],
+          [0.36, 0.34, 0.7], [0.62, 0.4, 1.05], [0.48, 0.5, 0.85], [0.72, 0.6, 0.75],
+        ].map(([x, y, scale], index) => (
+          <circle
+            key={`${x}-${y}`}
+            className="mb-book-mote"
+            cx={cx + (x - 0.5) * bw * 2.1}
+            cy={top - bh * 0.5 + bh * y}
+            r={3.4 * scale}
+            style={{ animationDelay: `${index * 520}ms`, '--mote': scale }}
+          />
+        ))}
       </g>
     </svg>
   );

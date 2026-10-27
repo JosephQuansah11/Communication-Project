@@ -418,9 +418,19 @@ The inspector shows a **system** badge and the editor footer shows the active fo
       with `cos(flip)` (so it goes edge-on and back), and when it reaches the floor its flip is snapped to the nearest
       whole number of half-turns — an **odd** number lands on the other side. A coin that flipped slowly settles
       heads where a fast one settles tails, and both turn up in a handful of throws.
-    - **Open book**, **Playing keyboard** and **Jumping microphone** are drawn in SVG and animated by CSS
-      (`src/styles.css`) — leaves turning over the spine, keys pressing themselves in a rhythm, a microphone dropping
-      in and settling.
+    - **Open book (a bible)** runs as one CSS timeline (11 s at the scene's own pace): it stands **closed** in a
+      shaft of light — leather cover, a tooled gold cross with flared ends and a gem, a banded spine, dust drifting
+      in the light and a warm pool on the floor — then the **cover swings back** on its hinge (drawn flat and given
+      depth with `rotateY`), and the **pages turn over one after another**, before it shuts again for the next pass.
+      The cover is two groups: its inside is painted *under* the pages, so a page that has been turned comes to rest
+      on it, and its face is painted *over* them, so the closed book hides them — the two cross-fade while the cover
+      is on its way back, which is why the book is never shut with its inside facing the room. The page that turns
+      first is the one drawn last (the one you can see), and the turn windows never overlap. `tests/motion-backgrounds.test.js`
+      parses the keyframes to hold all of that: the shared cycle and speed control, the cover opening before the
+      first page moves, the turn order from the top of the stack down, every page flat again before the cover shuts,
+      and the crossfade landing inside the closing swing.
+    - **Playing keyboard** and **Jumping microphone** are drawn in SVG and animated by CSS (`src/styles.css`) — keys
+      pressing themselves in a rhythm, a microphone dropping in and settling.
     - The maths is checked in `tests/motion-physics.test.js`: gravity against the closed-form ½gt², energy falling at
       every impact, each bounce lower than the last, the ball never leaving the slide at three different deck sizes,
       the two-second rest and the restart, the landing face against the parity of the half-turns, and that the face
