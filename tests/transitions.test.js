@@ -99,31 +99,32 @@ test('the two decorated transitions have their decoration styled', () => {
   assert.ok(/@keyframes transition-sparkle\b/.test(css));
 });
 
-test('burn away is a fire: char, a hot line, flames and sparks', () => {
-  // The layers the transition draws, and a rule for each of them.
-  for (const part of ['burn-ash', 'burn-glow', 'burn-line', 'burn-flames', 'burn-embers']) {
+test('burn away draws the fire through its own component', () => {
+  // The fire is the one decoration with machinery behind it, so the transition hands it
+  // to a component rather than drawing it inline. What that component does — the mask,
+  // the strips, the shader and the fallback — is checked in `burn.test.js`.
+  assert.match(component, /import BurnTransition from '\.\/BurnTransition\.tsx'/, 'it imports the component');
+  assert.match(component, /id === 'burnAway' \? <BurnTransition/, 'and renders it for burn away');
+  assert.match(component, /--burn-mask/, 'handing it the mask, which belongs to the held slide');
+  // The band still sweeps sideways, and the layers it needs are all styled.
+  for (const part of ['burn-canvas', 'burn-ash', 'burn-strip', 'burn-glow', 'burn-line', 'burn-flames', 'burn-embers']) {
     assert.ok(new RegExp(`\\.transition-burn \\.${part}\\b`).test(css), `${part} is styled`);
-    assert.ok(new RegExp(`className="${part}"`).test(component), `${part} is drawn`);
   }
   // The flames flare and the sparks rise, and both keep going for the whole burn.
-  assert.ok(/@keyframes transition-burnAway-flame\b/.test(css));
-  assert.ok(/@keyframes transition-burnAway-ember\b/.test(css));
   const flame = css.slice(css.indexOf('@keyframes transition-burnAway-flame'), css.indexOf('@keyframes transition-burnAway-ember'));
   assert.match(flame, /transform:\s*scale\(/, 'a flame changes shape');
   const ember = css.slice(css.indexOf('@keyframes transition-burnAway-ember'));
   assert.match(ember.slice(0, 600), /translate\(/, 'a spark drifts sideways');
   assert.match(ember.slice(0, 600), /-140%/, 'and rises off the line');
-  // Both loop, so the fire does not go out half way across the slide.
   for (const name of ['transition-burnAway-flame', 'transition-burnAway-ember']) {
     const rule = css.slice(css.indexOf(`animation: ${name}`), css.indexOf(';', css.indexOf(`animation: ${name}`)));
     assert.match(rule, /infinite/, `${name} repeats`);
     assert.match(rule, /var\(--transition-ms/, `${name} is timed off the transition`);
   }
-  // White-hot at the core, deep red at the tail: fire, not a colour wash.
-  const line = css.slice(css.indexOf('.transition-burn .burn-line'), css.indexOf('.transition-burn .burn-glow'));
+  // The CSS fire is painted, not blended: on a pale slide a screen blend would vanish.
+  const line = css.slice(css.indexOf('.transition-burn .burn-line'), css.indexOf('.transition-burn .burn-flames,'));
   assert.match(line, /rgba\(255, 250, 232/, 'the hottest part is nearly white');
   assert.match(line, /rgba\((7|8)\d, \d+, 4/, 'and it falls away into deep red');
-  // The fire is painted, not blended: on a pale slide a screen blend would vanish.
   const band = css.slice(css.indexOf('.transition-burn {'), css.indexOf('@keyframes transition-burnAway-sweep'));
   assert.ok(!/mix-blend-mode/.test(band), 'the fire itself is not blended away');
   assert.match(
@@ -133,20 +134,11 @@ test('burn away is a fire: char, a hot line, flames and sparks', () => {
   );
 });
 
-test('burn away sweeps across the slide, and the clip keeps up with the fire', () => {
+test('burn away sweeps across the slide, and the mask keeps up with the fire', () => {
+  // The old slide is eaten left to right, by the mask sliding the other way.
   const hold = css.slice(css.indexOf('@keyframes transition-burnAway-hold'), css.indexOf('.transition-hold.hold-burnAway'));
-  const stops = [...hold.matchAll(/clip-path:\s*polygon\(([^)]*)\)/g)].map((match) => match[1]);
-  assert.ok(stops.length >= 4, `several stops, found ${stops.length}`);
-  const counts = stops.map((stop) => stop.split(',').filter((pair) => pair.trim()).length);
-  assert.deepEqual([...new Set(counts)], [9], 'every stop has the same nine points, so it can interpolate');
-
-  // The front moves left to right: the first x of each stop only ever increases.
-  const fronts = stops.map((stop) => Number.parseFloat(stop.split(',')[0]));
-  for (let index = 1; index < fronts.length; index += 1) {
-    assert.ok(fronts[index] > fronts[index - 1], `stop ${index} is further right (${fronts[index]}%)`);
-  }
-  assert.equal(fronts[0], 0, 'it starts at the left edge');
-  assert.equal(fronts[fronts.length - 1], 100, 'and finishes at the right edge');
+  assert.match(hold, /mask-position:\s*100% 0/, 'the mask starts at its kept end');
+  assert.match(hold, /mask-position:\s*0% 0/, 'and ends at its burnt end');
 
   // The band rides the same front, with the same easing, so the fire is always on the
   // edge of the old slide rather than ahead of it or behind it.

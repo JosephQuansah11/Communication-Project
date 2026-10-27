@@ -21,7 +21,8 @@
     "start": "node scripts/start-server.mjs",
     "smoke": "node scripts/smoke-test.mjs",
     "import:check": "node scripts/check-import.mjs",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "express": "^4.21.2",
@@ -33,10 +34,13 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^4.3.4",
     "esbuild": "^0.21.5",
     "postject": "^1.0.0-alpha.6",
     "rcedit": "^5.0.2",
+    "typescript": "^7.0.2",
     "vite": "^5.4.11"
   }
 }

@@ -164,6 +164,7 @@ one after another:
 
 ```bash
 npm test              # unit tests, including the panel sizes and the install route
+npm run typecheck     # tsc --noEmit over the TypeScript modules
 npm run e2e:panels    # hiding and dragging the side panels, in a desktop-sized window
 npm run e2e:mobile    # the phone layout: sheets, pinch zoom, the installable app files
 node e2e-transitions.mjs      # the transitions, object effects and the character wave, played in a show
@@ -175,6 +176,14 @@ node e2e-controls-audit.mjs   # clicks every ribbon control and reports any erro
 
 The motion scenes honour `prefers-reduced-motion`, and headless Chrome reports *reduce* by default — the browser
 suites ask for normal motion with `Emulation.setEmulatedMedia` before they measure anything that moves.
+
+### TypeScript
+
+The app is JavaScript, with one exception: the burn away transition's machinery is TypeScript, because it is the part
+that is all maths and GPU plumbing. `tsconfig.json` covers `src/**/*.ts` and `src/**/*.tsx` in strict mode, and
+`npm run typecheck` runs the compiler over it (`vite` strips the types when it builds, so the check is a separate
+step). The `.js` unit tests import the `.ts` modules directly — Node strips the types itself — and Vite resolves the
+explicit `.ts`/`.tsx` specifiers the same way it resolves `.jsx`.
 
 ## What is implemented
 
@@ -356,14 +365,29 @@ The inspector shows a **system** badge and the editor footer shows the active fo
   lands behind a burst of points). Each entry's duration is handed to CSS as `--transition-ms`, so the animation
   and the catalog can never disagree, and *Apply to all* puts the chosen one on every slide. Imported decks arrive
   on **Fade** — the importer does not read `<p:transition>` yet.
-- **Burn away is a fire, not a colour wash.** A ragged front crosses the old slide from the left, and everything
-  rides that front: the slide is clipped along a nine-point edge (equal point counts, or `clip-path` will not
-  interpolate), char and ash smear out behind it, a white-hot line with amber either side burns along it, tongues of
-  flame flare and shrink as the fire passes, and sparks rise off it and burn out. The band, the clip and the sparks
-  all use the transition's own duration *and* the same easing curve, so the fire is always exactly on the edge of
-  what is left of the old slide. Only the halo is blended (`screen`, for a dark slide); the fire itself is painted in
-  solid colours, because a screen blend on a pale slide would disappear. The clip, the fire, the flames and the
-  sparks are all checked against the stylesheet in `tests/transitions.test.js`.
+- **Burn away is a fire, not a colour wash.** The technique is the one from the reference burn
+  (`codepen.io/jcoulterdesign/pen/YbBoNb`), with the art *generated* instead of downloaded:
+  - **The outgoing slide is dissolved by a mask carved from noise** (`src/lib/burnTexture.ts` builds it with the same
+    fractal-noise maths the shader uses). It is a wide ramp — clear on the left, opaque on the right, with a ragged
+    boundary between — and the stylesheet slides it across the slide (`mask-size: 200%`, `mask-position` 100% → 0%),
+    so the slide is eaten along that edge rather than along a straight line or a polygon. If a browser has no canvas
+    to build the mask with, the fallback is a plain gradient ramp, so the slide still dissolves.
+  - **The flames and the ash are sprite strips stepped through frame by frame**, exactly as the reference does it with
+    its pre-rendered strips: a strip is `frames` tiles laid out side by side, sized `frames × 100%` and walked from
+    `background-position: 0 0` to `100% 0` with `steps(frames, end)`, so the fire plays like film instead of sliding.
+    The strips themselves are noise drawn into a canvas at runtime — nothing is fetched and the app ships no art. The
+    flames are screened over the slide and the ash is painted (`multiply`) and masked to the burnt side, because a
+    screen blend of ash would vanish on a pale slide.
+  - **The fire itself is a WebGL shader** (`src/lib/burnShader.ts`, drawn by `src/components/BurnTransition.tsx`):
+    fractal noise carved into a burn front with a white-hot core, flame tongues and a halo, driven by `u_progress`
+    and `u_time`. The noise is squared against the *slide's* aspect rather than the canvas's (the canvas is a narrow
+    band, and using its shape stretched every flame into a streak). When a browser has no WebGL the canvas is not
+    drawn at all and the CSS fire underneath carries the transition on its own — the component reports which path
+    ran in `data-mode`, so the browser suite can check both.
+  - The mask, the band and the shader all run **linearly** and off the transition's own `--transition-ms`: if either
+    eased, the fire would slide off the burnt edge. `tests/burn.test.js` holds the maths (noise, the strips' pixels,
+    the mask's ragged edge, the progress curve) and the contract between the three (the shader's uniforms, the
+    stepped animations, the mask, and which fire is on duty), and the browser suite checks a live burn.
 - **Set Up Show** in the present dialog: pick the display, turn **presenter view** on or off, and build a
   **custom show** (tick the slides to play — the deck itself is never changed).
   - **Presenter view on** (default): the console (notes, timer, annotations, navigator, live panel) opens on your
@@ -649,10 +673,12 @@ src/
   pages/        Home, Editor, Presenter, LiveAudience
   components/   Ribbon + DocumentTabs + Popover (window chrome), AnnotationLayer, Canvas,
                 SlideView/ElementView, TextToolbar, TableEditor, Inspector, PresentDialog, Stage, Lightbox…,
-                BackgroundMedia (looping scene/video slide backgrounds)…
+                BackgroundMedia (looping scene/video slide backgrounds), motionScenes (the scenes themselves),
+                BurnTransition.tsx (the burn's canvas, strips and CSS fire)…
   hooks/        Undo/redo deck history, open document tabs (localStorage), workspace picture
   lib/          API client, element factories, rich-text sanitizer, backgrounds/picture fills, animations,
                 motion backgrounds (looping scenes + video backgrounds), motion physics (the ball and the coins),
+                burnTexture.ts/burnShader.ts (the burn's generated art and its WebGL fire),
                 annotations, shapes, fonts, ribbon model, slide layouts
 scripts/
   build-exe.mjs     Bundles the server, makes the SEA blob and injects it into the Node runtime
@@ -661,7 +687,8 @@ scripts/
   start-server.mjs  Cross-platform `npm start`
   smoke-test.mjs    End-to-end checks against a running instance
 tests/          Node test suites for formulas, PPTX import, rich text, the ribbon/layout model, picture fills,
-                animations, transitions, motion backgrounds and presenting annotations
+                animations, transitions, motion backgrounds, the burn's textures and shader, and presenting
+                annotations
 ```
 
 ### Scripts
@@ -693,6 +720,9 @@ tests/          Node test suites for formulas, PPTX import, rich text, the ribbo
 
 ## Notes & limits
 
+- The burn away transition draws its fire with **WebGL** when the browser has it and falls back to a CSS fire when it
+  does not; either way the outgoing slide is dissolved by the generated mask, and the strips are always there. The
+  generated art costs a few milliseconds the first time a burn plays (noise drawn into a canvas, once per session).
 - Legacy `.ppt`/`.dps` conversion depends on LibreOffice being installed on the server. Modern `.pptx` files
   (including WPS files saved in PowerPoint format) import natively.
 - Very exotic OOXML features (SmartArt, charts, animations, embedded OLE) are not reconstructed as editable
